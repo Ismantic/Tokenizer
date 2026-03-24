@@ -1,4 +1,4 @@
-# IsmaTokenizer
+# Tokenizer
 
 BPE (Byte Pair Encoding) 分词器的 C++ 实现，支持多种训练算法和推理策略。
 
