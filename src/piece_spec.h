@@ -111,6 +111,7 @@ class CounterSpec {
 public:
     std::vector<std::string> input_;
     std::string model_prefix_;
+    std::string method_ = "bytepiece";
     int32_t vocab_size_ = 8000;
     float character_coverage_ = 0.9995f;
     
@@ -129,6 +130,9 @@ public:
     
     const std::string& model_prefix() const { return model_prefix_; }
     void set_model_prefix(const std::string& prefix) { model_prefix_ = prefix; }
+
+    const std::string& method() const { return method_; }
+    void set_method(const std::string& m) { method_ = m; }
     
     int32_t vocab_size() const { return vocab_size_; }
     void set_vocab_size(int32_t size) { vocab_size_ = size; }
@@ -158,6 +162,7 @@ public:
     std::string AsStr() const {
         std::ostringstream oss;
 
+        oss << "method=" << method_ << "\n";
         oss << "vocab_size=" << vocab_size_ << "\n";
         oss << "character_coverage=" << character_coverage_ << "\n";
 
@@ -188,7 +193,9 @@ public:
             key = line.substr(0, pos);
             value = line.substr(pos + 1);
             
-            if (key == "vocab_size") {
+            if (key == "method") {
+                method_ = value;
+            } else if (key == "vocab_size") {
                 vocab_size_ = std::stoi(value);
             } else if (key == "character_coverage") {
                 character_coverage_ = std::stof(value);

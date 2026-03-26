@@ -1,0 +1,2 @@
+pybind11_add_module(isma_tokenizer isma_tokenizer.cc)
+target_link_libraries(isma_tokenizer PRIVATE isma_tokenizer_lib)
