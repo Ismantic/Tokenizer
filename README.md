@@ -93,6 +93,22 @@ tok.vocab_size()                # → 1259
 tok.method                      # → 'sentencepiece'
 ```
 
+## 预训练模型
+
+`data/tokenizer.model` — 基于中文维基百科语料训练的 BytePiece 模型，80K 词表。
+
+```
+$ echo "中华人民共和国成立于1949年" | isma-tokenizer encode --model data/tokenizer.model
+中华    520
+人民共和国      449
+成立于  1157
+1       261
+9       266
+4       274
+9       266
+年      269
+```
+
 ## 项目结构
 
 ```
@@ -113,6 +129,8 @@ src/
   misc.h/cc             - 工具函数
 python/
   isma_tokenizer.cc     - pybind11 Python 绑定
+data/
+  tokenizer.model       - 预训练 BytePiece 模型（80K 词表，中文维基百科）
 docs/
   BPE.md                - BPE 算法原理
   BytePieceCounter.md   - BytePiece 训练详解
