@@ -11,6 +11,7 @@
 #include <limits>
 #include <iostream>
 #include <thread>
+#include <future>
 #include <atomic>
 #include <mutex>
 #include "darts.h"
@@ -348,17 +349,13 @@ public:
     virtual ~BytePieceCounter() {}
     
     bool Count() {
-        if (!LoadAndSplitSentences()) {
-            LOG(ERROR) << "Failed to load sentences.";
+        if (!StreamCountRaw()) {
+            LOG(ERROR) << "Failed to count raw substrings.";
             return false;
         }
-
-        LOG(INFO) << "Starting BytePiece training with " << sentences_.size() << " unique tokens";
-
-        CountRaw(sentences_);
         PruneRaw();
 
-        auto pieces_count = CountPieces(sentences_);
+        auto pieces_count = StreamCountPieces();
         auto pruned_pieces = PrunePieces(pieces_count);
 
         std::vector<std::pair<std::string, int>> sorted_pieces(pruned_pieces.begin(), pruned_pieces.end());
@@ -423,8 +420,6 @@ public:
     }
     
 private:
-    using Sentence = std::pair<std::string, int64_t>;
-    using Sentences = std::vector<Sentence>;
     using Str2Int = std::unordered_map<std::string, int>;
     using Str2Float = std::unordered_map<std::string, float_t>;
 
@@ -546,74 +541,164 @@ private:
         return true;
     }
     
-    bool LoadAndSplitSentences() {
-        LOG(INFO) << "Loading and splitting sentences ...";
-
-        const Normalizer normalizer(normalizer_spec_);
-        const std::string_view space = normalizer_spec_.GetSpace();
-
-        auto iter_ = std::make_unique<MultiFileSentenceIterator>(
+    std::unique_ptr<MultiFileSentenceIterator> MakeIterator() const {
+        return std::make_unique<MultiFileSentenceIterator>(
             std::vector<std::string>(counter_spec_.input().begin(),
-                                  counter_spec_.input().end()));
-        SentenceIterator* sentence_iterator_ = iter_.get();
-
-        std::unordered_map<std::string, int64_t> tokens;
-        size_t line_count = 0;
-
-        for (; !sentence_iterator_->done(); sentence_iterator_->Next()) {
-            std::string sentence = sentence_iterator_->value();
-            if (sentence.empty()) continue;
-
-            std::string normalized = normalizer.Normalize(sentence);
-            for (const auto& w : ustr::SplitText(normalized, space)) {
-                tokens[std::string(w)] += 1;
-            }
-
-            if (++line_count % 1000000 == 0) {
-                LOG(INFO) << "Processed " << line_count << " lines, "
-                          << tokens.size() << " unique tokens";
-            }
-        }
-
-        sentences_.clear();
-        sentences_.reserve(tokens.size());
-        for (auto& [word, count] : tokens) {
-            sentences_.emplace_back(std::move(word), count);
-        }
-
-        LOG(INFO) << "Done! " << line_count << " lines, "
-                  << sentences_.size() << " unique tokens";
-        return true;
+                                     counter_spec_.input().end()));
     }
-    
-    void CountRaw(const Sentences& sentences) {
-        LOG(INFO) << "Counting raw substrings...";
+
+    static bool IsSeparator(const char* p, int len) {
+        if (len == 1) {
+            unsigned char c = static_cast<unsigned char>(p[0]);
+            if (c >= '0' && c <= '9') return true;
+            if (c == ',' || c == '.' || c == '!' || c == '?' || c == ';' ||
+                c == ':' || c == '"' || c == '\'' || c == '(' || c == ')' ||
+                c == '[' || c == ']' || c == '{' || c == '}' || c == '-' ||
+                c == '_' || c == '+' || c == '=' || c == '/' || c == '\\' ||
+                c == '<' || c == '>' || c == '~' || c == '@' || c == '#' ||
+                c == '$' || c == '%' || c == '^' || c == '&' || c == '*')
+                return true;
+        }
+        if (len == 3) {
+            unsigned char b1 = static_cast<unsigned char>(p[0]);
+            unsigned char b2 = static_cast<unsigned char>(p[1]);
+            unsigned char b3 = static_cast<unsigned char>(p[2]);
+            if (b1 == 0xEF && b2 == 0xBC && b3 >= 0x90 && b3 <= 0x99) return true;
+            if (b1 == 0xE3 && b2 == 0x80 && b3 >= 0x80 && b3 <= 0xBF) return true;
+            if (b1 == 0xEF && b2 == 0xBC && b3 >= 0x81 && b3 <= 0xBF) return true;
+            if (b1 == 0xEF && b2 == 0xBD && b3 >= 0x80 && b3 <= 0x9F) return true;
+        }
+        return false;
+    }
+
+    template<typename Fn>
+    static void ForEachWord(const std::string& line, Fn&& fn) {
+        const char* p = line.c_str();
+        const char* end = p + line.size();
+        const char* word_start = nullptr;
+
+        auto flush = [&]() {
+            if (word_start && p > word_start) {
+                fn(std::string_view(word_start, p - word_start));
+            }
+            word_start = nullptr;
+        };
+
+        while (p < end) {
+            unsigned char c = static_cast<unsigned char>(*p);
+
+            if (c == ' ' || c == '\t' || c == '\r' || c == '\n') {
+                flush();
+                ++p;
+                continue;
+            }
+
+            int mblen = SizeUTF8(c);
+            if (p + mblen > end) mblen = static_cast<int>(end - p);
+
+            if (IsSeparator(p, mblen)) {
+                flush();
+                fn(std::string_view(p, mblen));
+                p += mblen;
+                continue;
+            }
+
+            if (!word_start) word_start = p;
+            p += mblen;
+        }
+        flush();
+    }
+
+    bool StreamCountRaw() {
+        const size_t workers = std::min<size_t>(
+            std::thread::hardware_concurrency(), 8);
+        LOG(INFO) << "Pass 1: counting substrings with " << workers << " workers...";
+
+        using NMaps = std::vector<std::unordered_map<std::string, float_t>>;
 
         N_.clear();
         N_.resize(max_piece_count_ + 1);
-        N_[0][""] = 0;
 
-        for (const auto& [text, freq] : sentences) {
-            for (size_t i = 0; i < text.length(); ++i) {
-                N_[0][""] += freq;
+        auto iter = MakeIterator();
+        size_t line_count = 0;
+        constexpr size_t kBatchLines = 1000000;
 
-                std::string piece;
-                piece.reserve(std::min(max_piece_count_, text.length() - i));
+        // Fill a batch of words from the iterator (called from reader thread only)
+        auto fill_batch = [&](std::vector<std::string>& batch) -> size_t {
+            batch.clear();
+            size_t lines = 0;
+            for (; !iter->done() && lines < kBatchLines; iter->Next(), ++lines) {
+                const std::string& line = iter->value();
+                if (line.empty()) continue;
+                ForEachWord(line, [&batch](std::string_view word) {
+                    batch.emplace_back(word);
+                });
+            }
+            return lines;
+        };
 
-                const size_t max_len = std::min(max_piece_count_, text.length() - i);
-                for (size_t j = 1; j <= max_len; ++j) {
-                    piece.push_back(text[i + j - 1]);
-                    N_[j][piece] += freq;
+        // Process a batch: parallel count into per-thread maps, merge into N_
+        auto process_batch = [&](std::vector<std::string>& batch) {
+            if (batch.empty()) return;
+            std::vector<NMaps> per_thread(workers);
+            for (auto& nm : per_thread) nm.resize(max_piece_count_ + 1);
+
+            std::vector<std::thread> threads;
+            const size_t chunk = (batch.size() + workers - 1) / workers;
+            for (size_t w = 0; w < workers; ++w) {
+                const size_t begin = w * chunk;
+                const size_t end = std::min(batch.size(), begin + chunk);
+                if (begin >= end) break;
+                threads.emplace_back([&, begin, end, w]() {
+                    auto& local_N = per_thread[w];
+                    for (size_t idx = begin; idx < end; ++idx) {
+                        const auto& text = batch[idx];
+                        for (size_t i = 0; i < text.length(); ++i) {
+                            local_N[0][""] += 1;
+                            std::string piece;
+                            const size_t max_len = std::min(
+                                max_piece_count_, text.length() - i);
+                            for (size_t j = 1; j <= max_len; ++j) {
+                                piece.push_back(text[i + j - 1]);
+                                local_N[j][piece] += 1;
+                            }
+                        }
+                    }
+                });
+            }
+            for (auto& t : threads) t.join();
+
+            for (auto& local_N : per_thread) {
+                for (size_t i = 0; i <= max_piece_count_; ++i) {
+                    for (auto& [k, v] : local_N[i]) {
+                        N_[i][k] += v;
+                    }
                 }
             }
+        };
+
+        // Double buffering: read next batch while processing current batch
+        std::vector<std::string> work_batch, read_batch;
+        line_count += fill_batch(work_batch);
+
+        while (!work_batch.empty()) {
+            // Async read next batch
+            auto read_future = std::async(std::launch::async,
+                [&]() { return fill_batch(read_batch); });
+
+            // Process current batch on main thread (8 workers)
+            process_batch(work_batch);
+
+            // Wait for next batch to be ready, swap buffers
+            line_count += read_future.get();
+            LOG(INFO) << "Pass 1: " << line_count << " lines";
+            std::swap(work_batch, read_batch);
         }
 
         size_t cnt = 0;
-        for (size_t i = 0; i < N_.size(); ++i) {
-            cnt += N_[i].size();
-        }
-
-        LOG(INFO) << "Done counting raw substrings " << cnt;
+        for (size_t i = 0; i < N_.size(); ++i) cnt += N_[i].size();
+        LOG(INFO) << "Pass 1 done: " << cnt << " entries";
+        return true;
     }
     
     void PruneRaw() {
@@ -835,26 +920,54 @@ private:
         return tokens;
     } 
 
-   Str2Int CountPieces(const Sentences& sentences) {
-        LOG(INFO) << "Counting pieces...";
-        const size_t batch_size = 2048;
-        Str2Int pieces = ParallelBatchCount<Str2Int>(
-            sentences.size(), batch_size,
-            [&](size_t begin, size_t end) {
-                Str2Int batch_counts;
-                for (size_t idx = begin; idx < end; ++idx) {
-                    const auto& [text, freq] = sentences[idx];
-                    auto tokens = Tokenize(text);
-                    for (const auto& piece : tokens) {
-                        if (piece.length() == 0) continue;
-                        batch_counts[piece] += freq;
+    Str2Int StreamCountPieces() {
+        LOG(INFO) << "Pass 2: counting pieces...";
+        Str2Int total_pieces;
+
+        auto iter = MakeIterator();
+        size_t line_count = 0;
+
+        std::vector<std::string> buffer;
+        const size_t flush_size = 50000;
+
+        auto flush = [&]() {
+            if (buffer.empty()) return;
+            Str2Int batch = ParallelBatchCount<Str2Int>(
+                buffer.size(), 2048,
+                [&](size_t begin, size_t end) {
+                    Str2Int counts;
+                    for (size_t i = begin; i < end; ++i) {
+                        for (const auto& piece : Tokenize(buffer[i])) {
+                            if (!piece.empty()) counts[piece] += 1;
+                        }
                     }
-                }
-                return batch_counts;
+                    return counts;
+                });
+            MergeCounts(&total_pieces, batch);
+            buffer.clear();
+        };
+
+        for (; !iter->done(); iter->Next()) {
+            const std::string& line = iter->value();
+            if (line.empty()) continue;
+
+            ForEachWord(line, [&](std::string_view word) {
+                buffer.emplace_back(word);
             });
 
-        LOG(INFO) << "Found " << pieces.size() << " unique pieces";
-        return pieces;
+            if (buffer.size() >= flush_size) {
+                flush();
+            }
+
+            if (++line_count % 1000000 == 0) {
+                LOG(INFO) << "Pass 2: " << line_count << " lines, "
+                          << total_pieces.size() << " pieces";
+            }
+        }
+        flush();
+
+        LOG(INFO) << "Pass 2 done: " << total_pieces.size() << " unique pieces";
+        return total_pieces;
     }
 
 
@@ -976,7 +1089,6 @@ private:
     std::map<int, std::pair<std::string, Model::Piece::Type>> meta_pieces_;
     std::vector<std::pair<std::string, float>> byte_pieces_;
     std::vector<std::pair<std::string, float>> pieces_;
-    Sentences sentences_;
     CounterSpec counter_spec_;
     NormalizerSpec normalizer_spec_;
     

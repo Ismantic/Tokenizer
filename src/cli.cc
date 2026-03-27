@@ -1,5 +1,6 @@
 #include <iostream>
 #include <string>
+#include <vector>
 #include <cstring>
 
 #include "piece_spec.h"
@@ -29,11 +30,12 @@ void PrintUsage(const char* prog) {
               << "Decode reads token ids (space-separated) and outputs text.\n";
 }
 
-void RunTrain(const std::string& method, const std::string& input,
+void RunTrain(const std::string& method,
+              const std::vector<std::string>& inputs,
               const std::string& model_prefix, int vocab_size,
               const std::string& normalizer_name) {
     CounterSpec counter_spec;
-    counter_spec.add_input(input);
+    for (const auto& f : inputs) counter_spec.add_input(f);
     counter_spec.set_model_prefix(model_prefix);
     counter_spec.set_method(method);
 
@@ -49,8 +51,9 @@ void RunTrain(const std::string& method, const std::string& input,
     }
     counter_spec.set_vocab_size(size);
 
-    std::cerr << "Training: method=" << method << " input=" << input
-              << " vocab_size=" << vocab_size << " model=" << model_prefix << "\n";
+    for (const auto& f : inputs)
+        std::cerr << "Training: method=" << method << " input=" << f
+                  << " vocab_size=" << vocab_size << " model=" << model_prefix << "\n";
 
     if (method == "naive") {
         NaiveCounter counter(counter_spec, normalizer_spec);
@@ -197,7 +200,7 @@ int main(int argc, char* argv[]) {
 
     if (command == "train") {
         std::string method = "bytepiece";
-        std::string input;
+        std::vector<std::string> inputs;
         std::string model_prefix = "tokenizer";
         int vocab_size = 8000;
         std::string normalizer = "identity";
@@ -206,7 +209,7 @@ int main(int argc, char* argv[]) {
             if (std::strcmp(argv[i], "--method") == 0 && i + 1 < argc) {
                 method = argv[++i];
             } else if (std::strcmp(argv[i], "--input") == 0 && i + 1 < argc) {
-                input = argv[++i];
+                inputs.push_back(argv[++i]);
             } else if (std::strcmp(argv[i], "--model") == 0 && i + 1 < argc) {
                 model_prefix = argv[++i];
             } else if (std::strcmp(argv[i], "--vocab-size") == 0 && i + 1 < argc) {
@@ -220,12 +223,12 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        if (input.empty()) {
+        if (inputs.empty()) {
             std::cerr << "Error: --input is required for train\n";
             return 1;
         }
 
-        piece::RunTrain(method, input, model_prefix, vocab_size, normalizer);
+        piece::RunTrain(method, inputs, model_prefix, vocab_size, normalizer);
 
     } else if (command == "encode" || command == "decode") {
         std::string model_file;
