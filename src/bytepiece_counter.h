@@ -85,45 +85,6 @@ private:
     
     bool InitMetaPieces();
     std::unique_ptr<MultiFileSentenceIterator> MakeIterator() const;
-    static bool IsSeparator(const char* p, int len);
-
-    template<typename Fn>
-    static void ForEachWord(const std::string& line, Fn&& fn) {
-        const char* p = line.c_str();
-        const char* end = p + line.size();
-        const char* word_start = nullptr;
-
-        auto flush = [&]() {
-            if (word_start && p > word_start) {
-                fn(std::string_view(word_start, p - word_start));
-            }
-            word_start = nullptr;
-        };
-
-        while (p < end) {
-            unsigned char c = static_cast<unsigned char>(*p);
-
-            if (c == ' ' || c == '\t' || c == '\r' || c == '\n') {
-                flush();
-                ++p;
-                continue;
-            }
-
-            int mblen = SizeUTF8(c);
-            if (p + mblen > end) mblen = static_cast<int>(end - p);
-
-            if (IsSeparator(p, mblen)) {
-                flush();
-                fn(std::string_view(p, mblen));
-                p += mblen;
-                continue;
-            }
-
-            if (!word_start) word_start = p;
-            p += mblen;
-        }
-        flush();
-    }
 
     bool StreamCountRaw();
     void PruneRaw();

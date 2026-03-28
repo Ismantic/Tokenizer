@@ -104,42 +104,7 @@ bool NaiveCounter::Count() {
 
     piece = first_piece + second_piece;
 
-    bool is_valid_utf8 = true;
-    const auto* data =
-        reinterpret_cast<const uint8_t*>(piece.data());
-    const size_t len = piece.size();
-    size_t pos = 0;
-    while (pos < len) {
-      if (data[pos] < 0x80) {
-        pos += 1;
-      } else if ((data[pos] & 0xE0) == 0xC0) {
-        if (pos + 1 >= len || (data[pos + 1] & 0xC0) != 0x80) {
-          is_valid_utf8 = false;
-          break;
-        }
-        pos += 2;
-      } else if ((data[pos] & 0xF0) == 0xE0) {
-        if (pos + 2 >= len ||
-            (data[pos + 1] & 0xC0) != 0x80 ||
-            (data[pos + 2] & 0xC0) != 0x80) {
-          is_valid_utf8 = false;
-          break;
-        }
-        pos += 3;
-      } else if ((data[pos] & 0xF8) == 0xF0) {
-        if (pos + 3 >= len ||
-            (data[pos + 1] & 0xC0) != 0x80 ||
-            (data[pos + 2] & 0xC0) != 0x80 ||
-            (data[pos + 3] & 0xC0) != 0x80) {
-          is_valid_utf8 = false;
-          break;
-        }
-        pos += 4;
-      } else {
-        is_valid_utf8 = false;
-        break;
-      }
-    }
+    const bool is_valid_utf8 = ustr::IsStructurallyValid(piece);
 
     if (!is_valid_utf8) {
       int idx = INITAL_VOCAB_SIZE + merges_.size();

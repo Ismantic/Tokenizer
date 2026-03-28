@@ -148,7 +148,8 @@ std::vector<BytePieceTokenizer::Match> BytePieceTokenizer::GetMatches(
     const int num = text.length();
     int pos = 0;
     while (pos < num) {
-        const int n = SizeUTF8(static_cast<uint8_t>(text[pos]));
+        const int n = static_cast<int>(
+            ustr::UTF8CharLen(static_cast<unsigned char>(text[pos])));
         if (pos + n - 1 < num) {
             matches.emplace_back(pos + n - 1, n, -10.0);
         }

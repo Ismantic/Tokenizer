@@ -19,9 +19,13 @@ namespace ustr {
 using UnicodeText = std::vector<uint32_t>;
 static constexpr uint32_t UnicodeError = 0xFFFD;
 
+inline size_t UTF8CharLen(unsigned char lead_byte) {
+  return "\1\1\1\1\1\1\1\1\1\1\1\1\2\2\3\4"[lead_byte >> 4];
+}
+
 // Return length of a single UTF-8 source character
 inline size_t OneUTF8Size(const char *src) {
-  return "\1\1\1\1\1\1\1\1\1\1\1\1\2\2\3\4"[(*src & 0xFF) >> 4];
+  return UTF8CharLen(static_cast<unsigned char>(*src));
 }
 
 // Return (x & 0xC0) == 0x80;
@@ -160,6 +164,16 @@ inline int PieceToByte(std::string_view piece) {
     }
 }
 
+bool IsDigitToken(std::string_view text);
+
+bool IsPunctuationToken(std::string_view text);
+
+inline bool IsSeparatorToken(std::string_view text) {
+  return IsDigitToken(text) || IsPunctuationToken(text);
+}
+
 std::vector<std::string_view> SplitText(std::string_view text, const std::string_view space);
+
+std::vector<std::string_view> SplitWords(std::string_view text);
 
 } // namespace ustr

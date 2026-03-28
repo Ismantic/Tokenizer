@@ -18,14 +18,6 @@ namespace piece {
 
 using float_t = double;
 
-inline int SizeUTF8(uint8_t c) {
-    if ((c & 0b10000000) == 0) return 1;
-    if ((c & 0b11100000) == 0b11000000) return 2;
-    if ((c & 0b11110000) == 0b11100000) return 3;
-    if ((c & 0b11111000) == 0b11110000) return 4;
-    return 1;
-}
-
 class BytePieceTokenizer {
 public:
     using EncodeResult = std::vector<std::pair<std::string, int>>;

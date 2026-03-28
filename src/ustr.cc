@@ -110,65 +110,63 @@ std::string UnicodeTextToUTF8(const UnicodeText &utext) {
     return result;
 }
 
+bool IsDigitToken(std::string_view text) {
+    if (text.size() == 1 && text[0] >= '0' && text[0] <= '9') return true;
+
+    if (text.size() == 3 &&
+        static_cast<unsigned char>(text[0]) == 0xEF &&
+        static_cast<unsigned char>(text[1]) == 0xBC &&
+        static_cast<unsigned char>(text[2]) >= 0x90 &&
+        static_cast<unsigned char>(text[2]) <= 0x99) {
+        return true;
+    }
+
+    return false;
+}
+
+bool IsPunctuationToken(std::string_view text) {
+    if (text.size() == 1) {
+        char c = text[0];
+        if (c == ',' || c == '.' || c == '!' || c == '?' || c == ';' ||
+            c == ':' || c == '"' || c == '\'' || c == '(' || c == ')' ||
+            c == '[' || c == ']' || c == '{' || c == '}' || c == '-' ||
+            c == '_' || c == '+' || c == '=' || c == '/' || c == '\\' ||
+            c == '<' || c == '>' || c == '~' || c == '@' || c == '#' ||
+            c == '$' || c == '%' || c == '^' || c == '&' || c == '*') {
+            return true;
+        }
+    }
+
+    if (text.size() == 3) {
+        unsigned char b1 = static_cast<unsigned char>(text[0]);
+        unsigned char b2 = static_cast<unsigned char>(text[1]);
+        unsigned char b3 = static_cast<unsigned char>(text[2]);
+
+        if (b1 == 0xE3 && b2 == 0x80 && (b3 >= 0x80 && b3 <= 0xBF)) return true;
+        if (b1 == 0xEF && b2 == 0xBC && (b3 >= 0x81 && b3 <= 0xBF)) return true;
+        if (b1 == 0xEF && b2 == 0xBD && (b3 >= 0x80 && b3 <= 0x9F)) return true;
+        if (b1 == 0xE3 && b2 == 0x80 && (b3 >= 0x89 && b3 <= 0x9F)) return true;
+
+        if (b1 == 0xE3 && b2 == 0x80 && b3 == 0x82) return true;
+        if (b1 == 0xEF && b2 == 0xBC && b3 == 0x8C) return true;
+        if (b1 == 0xEF && b2 == 0xBC && b3 == 0x9A) return true;
+        if (b1 == 0xEF && b2 == 0xBC && b3 == 0x9B) return true;
+        if (b1 == 0xEF && b2 == 0xBC && b3 == 0x9C) return true;
+        if (b1 == 0xEF && b2 == 0xBC && b3 == 0x9E) return true;
+        if (b1 == 0xEF && b2 == 0xBC && b3 == 0x81) return true;
+        if (b1 == 0xEF && b2 == 0xBC && b3 == 0x9F) return true;
+        if (b1 == 0xE3 && b2 == 0x80 && b3 == 0x94) return true;
+        if (b1 == 0xE3 && b2 == 0x80 && b3 == 0x95) return true;
+        if (b1 == 0xE3 && b2 == 0x80 && b3 == 0x96) return true;
+    }
+
+    return false;
+}
+
 std::vector<std::string_view> SplitText(std::string_view text, const std::string_view space) {
     const char* begin = text.data();
     const char* end = text.data() + text.size();
     std::vector<std::string_view> result;
-
-    auto is_digit = [](std::string_view sv) {
-        // 0-9
-        if (sv.size() == 1 && sv[0] >= '0' && sv[0] <= '9') return true;
-        
-        // ０-９
-        if (sv.size() == 3 && 
-            static_cast<unsigned char>(sv[0]) == 0xEF && 
-            static_cast<unsigned char>(sv[1]) == 0xBC && 
-            static_cast<unsigned char>(sv[2]) >= 0x90 && 
-            static_cast<unsigned char>(sv[2]) <= 0x99) return true;
-        
-        return false;
-    };
-
-    auto is_punctuation = [](std::string_view sv) {
-        if (sv.size() == 1) {
-            char c = sv[0];
-            if (c == ',' || c == '.' || c == '!' || c == '?' || c == ';' || 
-                c == ':' || c == '"' || c == '\'' || c == '(' || c == ')' ||
-                c == '[' || c == ']' || c == '{' || c == '}' || c == '-' ||
-                c == '_' || c == '+' || c == '=' || c == '/' || c == '\\' ||
-                c == '<' || c == '>' || c == '~' || c == '@' || c == '#' ||
-                c == '$' || c == '%' || c == '^' || c == '&' || c == '*') {
-                return true;
-            }
-        }
-        
-        if (sv.size() == 3) {
-            unsigned char b1 = static_cast<unsigned char>(sv[0]);
-            unsigned char b2 = static_cast<unsigned char>(sv[1]);
-            unsigned char b3 = static_cast<unsigned char>(sv[2]);
-            
-            // ：，。！？；：""''（）【】《》
-            if (b1 == 0xE3 && b2 == 0x80 && (b3 >= 0x80 && b3 <= 0xBF)) return true; // 全角标点部分
-            if (b1 == 0xEF && b2 == 0xBC && (b3 >= 0x81 && b3 <= 0xBF)) return true; // 全角标点部分
-            if (b1 == 0xEF && b2 == 0xBD && (b3 >= 0x80 && b3 <= 0x9F)) return true; // 全角标点部分
-            if (b1 == 0xE3 && b2 == 0x80 && (b3 >= 0x89 && b3 <= 0x9F)) return true; // 引号和括号等
-            
-            if (b1 == 0xE3 && b2 == 0x80 && b3 == 0x82) return true; // 顿号 、
-            if (b1 == 0xEF && b2 == 0xBC && b3 == 0x8C) return true; // 全角逗号 ，
-            if (b1 == 0xEF && b2 == 0xBC && b3 == 0x9A) return true; // 全角冒号 ：
-            if (b1 == 0xEF && b2 == 0xBC && b3 == 0x9B) return true; // 全角分号 ；
-            if (b1 == 0xEF && b2 == 0xBC && b3 == 0x9C) return true; // 全角小于 ＜
-            if (b1 == 0xEF && b2 == 0xBC && b3 == 0x9E) return true; // 全角大于 ＞
-            if (b1 == 0xEF && b2 == 0xBC && b3 == 0x81) return true; // 全角叹号 ！
-            if (b1 == 0xEF && b2 == 0xBC && b3 == 0x9F) return true; // 全角问号 ？
-            if (b1 == 0xE3 && b2 == 0x80 && b3 == 0x94) return true; // 破折号 —
-            if (b1 == 0xE3 && b2 == 0x80 && b3 == 0x95) return true; // 破折号 ―
-            if (b1 == 0xE3 && b2 == 0x80 && b3 == 0x96) return true; // 破折号 ‖
-        }
-        
-        return false;
-    };
-
 
     if (begin >= end) return result;
 
@@ -184,7 +182,7 @@ std::vector<std::string_view> SplitText(std::string_view text, const std::string
             continue;
         }
         
-        if (is_digit(current_char) || is_punctuation(current_char)) {
+        if (IsSeparatorToken(current_char)) {
             if (result.back().size() == 0) {
                 result.back() = std::string_view(begin, mblen);
             } else {
@@ -210,6 +208,50 @@ std::vector<std::string_view> SplitText(std::string_view text, const std::string
         result.end()
     );
     
+    return result;
+}
+
+std::vector<std::string_view> SplitWords(std::string_view text) {
+    const char* begin = text.data();
+    const char* end = text.data() + text.size();
+    const char* word_start = nullptr;
+    std::vector<std::string_view> result;
+
+    auto flush = [&]() {
+        if (word_start && begin > word_start) {
+            result.emplace_back(word_start, begin - word_start);
+        }
+        word_start = nullptr;
+    };
+
+    while (begin < end) {
+        unsigned char c = static_cast<unsigned char>(*begin);
+        if (c == ' ' || c == '\t' || c == '\r' || c == '\n') {
+            flush();
+            ++begin;
+            continue;
+        }
+
+        int mblen = static_cast<int>(UTF8CharLen(c));
+        if (begin + mblen > end) {
+            mblen = static_cast<int>(end - begin);
+        }
+
+        std::string_view current(begin, mblen);
+        if (IsSeparatorToken(current)) {
+            flush();
+            result.push_back(current);
+            begin += mblen;
+            continue;
+        }
+
+        if (!word_start) {
+            word_start = begin;
+        }
+        begin += mblen;
+    }
+
+    flush();
     return result;
 }
 

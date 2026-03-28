@@ -132,31 +132,6 @@ std::unique_ptr<MultiFileSentenceIterator> BytePieceCounter::MakeIterator() cons
                                counter_spec_.input().end()));
 }
 
-bool BytePieceCounter::IsSeparator(const char* p, int len) {
-  if (len == 1) {
-    unsigned char c = static_cast<unsigned char>(p[0]);
-    if (c >= '0' && c <= '9') return true;
-    if (c == ',' || c == '.' || c == '!' || c == '?' || c == ';' ||
-        c == ':' || c == '"' || c == '\'' || c == '(' || c == ')' ||
-        c == '[' || c == ']' || c == '{' || c == '}' || c == '-' ||
-        c == '_' || c == '+' || c == '=' || c == '/' || c == '\\' ||
-        c == '<' || c == '>' || c == '~' || c == '@' || c == '#' ||
-        c == '$' || c == '%' || c == '^' || c == '&' || c == '*') {
-      return true;
-    }
-  }
-  if (len == 3) {
-    unsigned char b1 = static_cast<unsigned char>(p[0]);
-    unsigned char b2 = static_cast<unsigned char>(p[1]);
-    unsigned char b3 = static_cast<unsigned char>(p[2]);
-    if (b1 == 0xEF && b2 == 0xBC && b3 >= 0x90 && b3 <= 0x99) return true;
-    if (b1 == 0xE3 && b2 == 0x80 && b3 >= 0x80 && b3 <= 0xBF) return true;
-    if (b1 == 0xEF && b2 == 0xBC && b3 >= 0x81 && b3 <= 0xBF) return true;
-    if (b1 == 0xEF && b2 == 0xBD && b3 >= 0x80 && b3 <= 0x9F) return true;
-  }
-  return false;
-}
-
 bool BytePieceCounter::StreamCountRaw() {
   const size_t workers = std::min<size_t>(std::thread::hardware_concurrency(), 8);
   LOG(INFO) << "Pass 1: counting substrings with " << workers << " workers...";
@@ -176,7 +151,9 @@ bool BytePieceCounter::StreamCountRaw() {
     for (; !iter->done() && lines < kBatchLines; iter->Next(), ++lines) {
       const std::string& line = iter->value();
       if (line.empty()) continue;
-      ForEachWord(line, [&batch](std::string_view word) { batch.emplace_back(word); });
+      for (std::string_view word : ustr::SplitWords(line)) {
+        batch.emplace_back(word);
+      }
     }
     return lines;
   };
@@ -425,7 +402,9 @@ BytePieceCounter::Str2Int BytePieceCounter::StreamCountPieces() {
   for (; !iter->done(); iter->Next()) {
     const std::string& line = iter->value();
     if (line.empty()) continue;
-    ForEachWord(line, [&](std::string_view word) { buffer.emplace_back(word); });
+    for (std::string_view word : ustr::SplitWords(line)) {
+      buffer.emplace_back(word);
+    }
     if (buffer.size() >= flush_size) {
       flush();
     }
