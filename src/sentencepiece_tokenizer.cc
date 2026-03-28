@@ -20,6 +20,30 @@ SentencePieceTokenizer::SentencePieceTokenizer(const Model& model)
 
 SentencePieceTokenizer::~SentencePieceTokenizer() {}
 
+std::vector<std::string> SentencePieceTokenizer::Tokenize(
+    std::string_view text) const {
+    std::vector<std::string> tokens;
+    auto encoded = Encode(text);
+    tokens.reserve(encoded.size());
+    for (const auto& [piece, id] : encoded) {
+        tokens.push_back(piece);
+    }
+    return tokens;
+}
+
+std::string SentencePieceTokenizer::Decode(const EncodeResult& rs) const {
+    std::vector<int> ids;
+    ids.reserve(rs.size());
+    for (const auto& [piece, id] : rs) {
+        ids.push_back(id);
+    }
+    return Decode(ids);
+}
+
+float SentencePieceTokenizer::GetScore(int id) const {
+    return model_->GetPieces(id).GetScore();
+}
+
 void SentencePieceTokenizer::InitPieces() {
     pieces_.clear();
     reserve_.clear();

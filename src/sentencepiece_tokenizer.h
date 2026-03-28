@@ -1,5 +1,7 @@
 #pragma once
 
+#include <algorithm>
+#include <cstring>
 #include <vector>
 #include <string>
 #include <string_view>
@@ -93,36 +95,15 @@ public:
 
   EncodeResult Encode(std::string_view text) const;
 
-  std::vector<std::string> Tokenize(std::string_view text) const {
-    std::vector<std::string> tokens;
-    auto encoded = Encode(text);
-    tokens.reserve(encoded.size());
-    
-    for (const auto& [piece, id] : encoded) {
-        tokens.push_back(piece);
-    }
-    
-    return tokens;  
-  }
+  std::vector<std::string> Tokenize(std::string_view text) const;
 
   std::string Decode(const std::vector<int>& ids) const;
 
-  std::string Decode(const EncodeResult& rs) const {
-    std::vector<int> ids;
-    ids.reserve(rs.size());
-
-    for (const auto & [piece, id] : rs) {
-      ids.push_back(id);
-    }
-
-    return Decode(ids);
-  }
+  std::string Decode(const EncodeResult& rs) const;
 
 private:
   void InitPieces();
-  float GetScore(int id) const {
-    return model_->GetPieces(id).GetScore();
-  }
+  float GetScore(int id) const;
  
   const Model* model_ = nullptr;
   const std::unique_ptr<Normalizer> normalizer_;
