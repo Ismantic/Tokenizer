@@ -26,7 +26,7 @@ public:
 
   bool Count();
   bool Save() const;
-  bool Serialize(Model* model) const;
+  bool Serialize(Model* model_proto) const;
 
 private:
   using Sentence = std::pair<std::string, int64_t>;

@@ -78,7 +78,7 @@ public:
 
     std::string Decode(const std::vector<int>& ids) const {
         if (method_ == "naive") {
-            return naive_tok_->Detokenize(ids);
+            return naive_tok_->Decode(ids);
         } else if (method_ == "piece") {
             return piece_tok_->Decode(ids);
         } else if (method_ == "sentencepiece") {
