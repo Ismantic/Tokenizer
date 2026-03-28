@@ -179,32 +179,32 @@ bool NaiveCounter::Save() const {
   return true;
 }
 
-bool NaiveCounter::Serialize(Model* model_proto) const {
-  model_proto->Clear();
+bool NaiveCounter::Serialize(Model* model) const {
+  model->Clear();
 
   for (int id = 0; id < counter_spec_.vocab_size(); ++id) {
     const auto it = meta_pieces_.find(id);
     if (it != meta_pieces_.end()) {
-      auto* p = model_proto->InsertPieces();
+      auto* p = model->InsertPieces();
       p->SetPiece(it->second.first);
       p->SetType(it->second.second);
       p->SetScore(0.0);
     } else if (id < INITAL_VOCAB_SIZE) {
       std::string byte_piece(1, static_cast<char>(id));
-      auto* p = model_proto->InsertPieces();
+      auto* p = model->InsertPieces();
       p->SetPiece(byte_piece);
       p->SetType(Model::Piece::BYTE);
       p->SetScore(0.0);
     } else if (id - INITAL_VOCAB_SIZE < static_cast<int>(pieces_.size())) {
       const auto& piece = pieces_[id - INITAL_VOCAB_SIZE];
-      auto* p = model_proto->InsertPieces();
+      auto* p = model->InsertPieces();
       p->SetPiece(piece.first);
       p->SetScore(piece.second);
     }
   }
 
-  model_proto->SetCounterSpec(counter_spec_);
-  model_proto->SetNormalizerSpec(normalizer_spec_);
+  model->SetCounterSpec(counter_spec_);
+  model->SetNormalizerSpec(normalizer_spec_);
   return true;
 }
 

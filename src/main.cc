@@ -169,30 +169,24 @@ void RunDecode(const std::string& model_file) {
     } else if (method == "bytepiece") {
         BytePieceTokenizer tokenizer(model);
         while (std::getline(std::cin, line)) {
-            std::vector<std::pair<std::string, int>> tokens;
-            const auto& pieces = model.GetPieces();
+            std::vector<int> ids;
             std::istringstream iss(line);
             int id;
             while (iss >> id) {
-                if (id >= 0 && id < static_cast<int>(pieces.size())) {
-                    tokens.emplace_back(pieces[id].GetPiece(), id);
-                }
+                ids.push_back(id);
             }
-            std::cout << tokenizer.Decode(tokens) << "\n";
+            std::cout << tokenizer.Decode(ids) << "\n";
         }
     } else if (method == "sentencepiece") {
         SentencePieceTokenizer tokenizer(model);
         while (std::getline(std::cin, line)) {
-            std::vector<std::pair<std::string, int>> tokens;
-            const auto& pieces = model.GetPieces();
+            std::vector<int> ids;
             std::istringstream iss(line);
             int id;
             while (iss >> id) {
-                if (id >= 0 && id < static_cast<int>(pieces.size())) {
-                    tokens.emplace_back(pieces[id].GetPiece(), id);
-                }
+                ids.push_back(id);
             }
-            std::cout << tokenizer.Decode(tokens) << "\n";
+            std::cout << tokenizer.Decode(ids) << "\n";
         }
     } else {
         std::cerr << "Unknown method in model: " << method << "\n";

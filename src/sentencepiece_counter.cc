@@ -24,7 +24,7 @@ SentencePieceCounter::SentencePieceCounter(const CounterSpec &counter_spec,
     InitMetaPieces();
 }
 
-SentencePieceCounter::~SentencePieceCounter() {}
+SentencePieceCounter::~SentencePieceCounter() = default;
 
 bool SentencePieceCounter::InitMetaPieces() {
     if (counter_spec_.unk_id() >= 0) {
@@ -49,8 +49,8 @@ bool SentencePieceCounter::InitMetaPieces() {
 
     int byte_id = meta_pieces_.size();
     if (byte_id + 256 > counter_spec_.vocab_size()) {
-        std::cerr << "Error: Vocabulary size too small for byte_fallback. "
-                  << "Need at least " << (byte_id + 256) << " slots." << std::endl; 
+        LOG(ERROR) << "Vocabulary size too small for byte_fallback. Need at least "
+                   << (byte_id + 256) << " slots.";
         return false;
     }
 

@@ -93,9 +93,9 @@ std::string BytePieceTokenizer::Decode(const EncodeResult& encoded) const {
 }
 
 std::vector<std::string> BytePieceTokenizer::Tokenize(
-    const std::string& sentence) const {
+    std::string_view text) const {
     const float_t inf = std::numeric_limits<float_t>::infinity();
-    const int num = sentence.length();
+    const int num = text.length();
     std::vector<float_t> scores(num + 1, -inf);
     std::vector<int> routes(num + 1);
     scores[0] = 0;
@@ -103,7 +103,7 @@ std::vector<std::string> BytePieceTokenizer::Tokenize(
         routes[i] = i;
     }
 
-    const auto matches = GetMatches(sentence);
+    const auto matches = GetMatches(text);
     for (const auto& m : matches) {
         const int start = m.e - m.n + 1;
         const int end = m.e + 1;
@@ -123,7 +123,7 @@ std::vector<std::string> BytePieceTokenizer::Tokenize(
     int end = num;
     while (end > 0) {
         const int start = routes[end];
-        tokens.push_back(sentence.substr(start, end - start));
+        tokens.emplace_back(text.substr(start, end - start));
         end = start;
     }
     std::reverse(tokens.begin(), tokens.end());
@@ -143,12 +143,12 @@ int BytePieceTokenizer::PieceID(std::string_view piece) const {
 }
 
 std::vector<BytePieceTokenizer::Match> BytePieceTokenizer::GetMatches(
-    const std::string& sentence) const {
+    std::string_view text) const {
     std::vector<Match> matches;
-    const int num = sentence.length();
+    const int num = text.length();
     int pos = 0;
     while (pos < num) {
-        const int n = SizeUTF8(static_cast<uint8_t>(sentence[pos]));
+        const int n = SizeUTF8(static_cast<uint8_t>(text[pos]));
         if (pos + n - 1 < num) {
             matches.emplace_back(pos + n - 1, n, -10.0);
         }
@@ -156,7 +156,7 @@ std::vector<BytePieceTokenizer::Match> BytePieceTokenizer::GetMatches(
         const size_t kMaxNumResults = 16;
         new_darts::DoubleArray<int>::ResultPair results[kMaxNumResults];
         const size_t num_results = trie_.commonPrefixSearch(
-            sentence.c_str() + pos, results, kMaxNumResults, num - pos);
+            text.data() + pos, results, kMaxNumResults, num - pos);
         for (size_t i = 0; i < num_results; ++i) {
             if (pos + results[i].length - 1 < num) {
                 matches.emplace_back(pos + results[i].length - 1,

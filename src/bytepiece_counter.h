@@ -30,7 +30,7 @@ public:
     
     bool Count();
     bool Save() const;
-    bool Serialize(Model* model_proto) const;
+    bool Serialize(Model* model) const;
     
 private:
     using Str2Int = std::unordered_map<std::string, int>;

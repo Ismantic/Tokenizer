@@ -18,7 +18,7 @@ SentencePieceTokenizer::SentencePieceTokenizer(const Model& model)
         InitPieces();
 }
 
-SentencePieceTokenizer::~SentencePieceTokenizer() {}
+SentencePieceTokenizer::~SentencePieceTokenizer() = default;
 
 std::vector<std::string> SentencePieceTokenizer::Tokenize(
     std::string_view text) const {

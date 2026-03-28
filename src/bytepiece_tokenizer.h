@@ -39,7 +39,7 @@ public:
     EncodeResult Encode(std::string_view text) const;
     std::string Decode(const std::vector<int>& ids) const;
     std::string Decode(const EncodeResult& encoded) const;
-    std::vector<std::string> Tokenize(const std::string& sentence) const;
+    std::vector<std::string> Tokenize(std::string_view text) const;
 
 private:
     struct Match {
@@ -50,7 +50,7 @@ private:
     };
 
     int PieceID(std::string_view piece) const;
-    std::vector<Match> GetMatches(const std::string& sentence) const;
+    std::vector<Match> GetMatches(std::string_view text) const;
     void InitFromModel();
     void InitFromDict(const std::unordered_map<std::string, float_t>& dict);
 
