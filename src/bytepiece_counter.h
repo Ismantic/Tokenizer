@@ -596,18 +596,6 @@ private:
             tokens.push_back(text.substr(split_points[i], split_points[i + 1] - split_points[i]));
         }
         
-        // 输出opt_route和分词结果（用于调试）
-        //for (int i = 0; i < opt_route.size(); ++i) {
-        //    std::cout << opt_route[i] << " ";
-        //}
-        //std::cout << "\n";
-        
-        //std::cout << text << "=>";
-        //for (auto t : tokens) {
-        //    std::cout << t << " ";
-        //}
-        //std::cout << "\n";
-        
         return tokens;
     } 
 
@@ -748,14 +736,6 @@ private:
         return new_pieces;
     }
     
-    void InitTX() {
-        int num_ = max_piece_count_;
-        T_.resize(num_, std::vector<float_t>(num_, -INF));
-        for (int i = 0; i < num_; ++i) {
-            T_[i][0] = 0;
-            T_[i][std::min(i + 1, num_ - 1)] = 0;
-        }
-    }
     void InitT() {
         int num_ = max_piece_count_;
         T_.resize(num_, std::vector<float_t>(num_, -INF));
