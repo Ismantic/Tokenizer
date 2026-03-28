@@ -12,7 +12,7 @@
 
 #include "common.h"
 #include "misc.h"
-#include "new_normalizer.h"
+#include "normalizer.h"
 #include "piece_spec.h"
 #include "piece_tokenizer.h"
 #include "sentence.h"

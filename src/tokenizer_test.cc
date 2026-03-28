@@ -3,7 +3,7 @@
 #include <vector>
 
 #include "bytepiece_tokenizer.h"
-#include "new_normalizer.h"
+#include "normalizer.h"
 #include "test.h"
 
 namespace {

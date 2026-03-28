@@ -1,4 +1,4 @@
-#include "new_normalizer.h"
+#include "normalizer.h"
 #include "normalization_data.h"
 
 #include <utility>

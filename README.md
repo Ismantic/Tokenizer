@@ -122,7 +122,7 @@ src/
   sentencepiece_tokenizer.h/cc - 高级编解码推理
   bytepiece_counter.h/cc - BytePiece 训练
   bytepiece_tokenizer.h/cc - BytePiece 推理（Trie 最长匹配）
-  new_normalizer.h/cc   - NFKC Unicode 归一化
+  normalizer.h/cc       - NFKC Unicode 归一化
   ustr.h/cc             - UTF-8 编解码
   sentence.h/cc         - 文件 I/O
   darts.h / trie.h      - Double-Array Trie

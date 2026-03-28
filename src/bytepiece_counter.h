@@ -20,7 +20,7 @@
 #include "ustr.h"
 #include "misc.h"
 #include "sentence.h"
-#include "new_normalizer.h"
+#include "normalizer.h"
 
 namespace piece {
 class BytePieceCounter {

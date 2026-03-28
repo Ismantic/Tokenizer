@@ -6,7 +6,7 @@
 #include <unordered_map>
 #include <memory>
 
-#include "new_normalizer.h"
+#include "normalizer.h"
 #include "common.h"
 
 
