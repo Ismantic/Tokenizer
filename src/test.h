@@ -6,6 +6,8 @@
 #include <sstream>
 #include <string>
 
+#include "common.h"
+
 namespace test {
 
 int RunTests();
@@ -31,7 +33,7 @@ class Tester {
   }
   Tester &IsNear(float val1, float val2, float abs_error, 
                 const char *msg1, const char *msg2) {
-    const double diff = std::fabs(val1 - val2);
+    const piece::float_t diff = std::fabs(val1 - val2);
     if (diff > abs_error) {
       ss_ << "The difference between (" << msg1 << ") and (" << msg2 << ") is "
           << diff << ", which exceeds " << abs_error << ", where\n"
