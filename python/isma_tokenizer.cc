@@ -7,7 +7,8 @@
 #include "piece_spec.h"
 #include "new_normalizer.h"
 #include "naive_counter.h"
-#include "naive_tokenizer.h"
+#include "piece_counter.h"
+#include "piece_tokenizer.h"
 #include "sentencepiece_tokenizer.h"
 #include "bytepiece_counter.h"
 
@@ -29,8 +30,8 @@ public:
 
         if (method_ == "naive") {
             naive_tok_ = std::make_unique<NaiveTokenizer>(model_);
-        } else if (method_ == "simple") {
-            simple_tok_ = std::make_unique<SimpleTokenizer>(model_);
+        } else if (method_ == "piece") {
+            piece_tok_ = std::make_unique<PieceTokenizer>(model_);
         } else if (method_ == "sentencepiece") {
             sp_tok_ = std::make_unique<SentencePieceTokenizer>(model_);
         } else if (method_ == "bytepiece") {
@@ -44,8 +45,8 @@ public:
     std::vector<std::pair<std::string, int>> Encode(const std::string& text) const {
         if (method_ == "naive") {
             return naive_tok_->Encode(normalizer_->Normalize(text));
-        } else if (method_ == "simple") {
-            return simple_tok_->Encode(normalizer_->Normalize(text));
+        } else if (method_ == "piece") {
+            return piece_tok_->Encode(normalizer_->Normalize(text));
         } else if (method_ == "sentencepiece") {
             return sp_tok_->Encode(text);
         } else if (method_ == "bytepiece") {
@@ -77,8 +78,8 @@ public:
     std::string Decode(const std::vector<int>& ids) const {
         if (method_ == "naive") {
             return naive_tok_->Detokenize(ids);
-        } else if (method_ == "simple") {
-            return simple_tok_->Decode(ids);
+        } else if (method_ == "piece") {
+            return piece_tok_->Decode(ids);
         } else if (method_ == "sentencepiece") {
             return sp_tok_->Decode(ids);
         } else if (method_ == "bytepiece") {
@@ -92,8 +93,8 @@ public:
             return sp_tok_->PieceID(piece);
         } else if (method_ == "naive" && naive_tok_) {
             return naive_tok_->PieceID(piece);
-        } else if (method_ == "simple" && simple_tok_) {
-            return simple_tok_->PieceID(piece);
+        } else if (method_ == "piece" && piece_tok_) {
+            return piece_tok_->PieceID(piece);
         }
         // Fallback: linear search
         const auto& pieces = model_.GetPieces();
@@ -122,7 +123,7 @@ private:
     std::string method_;
     std::unique_ptr<Normalizer> normalizer_;
     std::unique_ptr<NaiveTokenizer> naive_tok_;
-    std::unique_ptr<SimpleTokenizer> simple_tok_;
+    std::unique_ptr<PieceTokenizer> piece_tok_;
     std::unique_ptr<SentencePieceTokenizer> sp_tok_;
     std::unique_ptr<BytePieceTokenizer> bp_tok_;
 };

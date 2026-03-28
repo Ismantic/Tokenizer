@@ -8,6 +8,8 @@ set(LIB_SRCS
     new_normalizer.cc
     bytepiece_tokenizer.cc
     bytepiece_counter.cc
+    piece_tokenizer.cc
+    piece_counter.cc
     naive_tokenizer.cc
     naive_counter.cc
 )
