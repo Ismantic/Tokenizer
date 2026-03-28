@@ -1,5 +1,6 @@
 #include "ustr.h"
 
+#include "common.h"
 #include "test.h"
 
 #include <iostream>
@@ -16,9 +17,9 @@ TEST(UstrTest, EncodePODTest) {
     }
 
     {
-        double v = 0.0;
-        tmp = EncodePOD<double>(10.0);
-        EXPECT_TRUE(DecodePOD<double>(tmp, &v));
+        piece::float_t v = 0.0;
+        tmp = EncodePOD<piece::float_t>(10.0);
+        EXPECT_TRUE(DecodePOD<piece::float_t>(tmp, &v));
         EXPECT_EQ(10.0, v);
     }
 

@@ -11,6 +11,8 @@
 
 namespace piece {
 
+using float_t = double;
+
 enum LogLevel {
     INFO = 0,
     WARNING = 1,

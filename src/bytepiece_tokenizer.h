@@ -16,8 +16,6 @@
 
 namespace piece {
 
-using float_t = double;
-
 class BytePieceTokenizer {
 public:
     using EncodeResult = std::vector<std::pair<std::string, int>>;
