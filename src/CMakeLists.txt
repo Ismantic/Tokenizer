@@ -1,13 +1,10 @@
 set(LIB_SRCS
-    common.cc
-    misc.cc
     ustr.cc
     sentence.cc
     sentencepiece_counter.cc
     sentencepiece_tokenizer.cc
     normalizer.cc
     bytepiece_tokenizer.cc
-    bytepiece_counter.cc
     piece_tokenizer.cc
     piece_counter.cc
     naive_tokenizer.cc

@@ -170,8 +170,12 @@ bool NaiveCounter::Count() {
 }
 
 bool NaiveCounter::Save() const {
-  SaveModel(counter_spec_.model_prefix() + ".model");
-  SaveVocab(counter_spec_.model_prefix() + ".vocab");
+  const std::string filename = counter_spec_.model_prefix() + ".model";
+  LOG(INFO) << "Saving model: " << filename;
+  Model model;
+  if (!Serialize(&model)) return false;
+  auto output = NewWritableFile(filename);
+  output->Write(model.AsStr());
   return true;
 }
 
@@ -283,27 +287,6 @@ void NaiveCounter::SplitSentencesByWhitespace() {
   }
   sentences_ = misc::Sorted(tokens);
   LOG(INFO) << "Done! " << sentences_.size();
-}
-
-bool NaiveCounter::SaveModel(std::string_view filename) const {
-  LOG(INFO) << "Saving model: " << filename;
-  Model model_proto;
-  if (!Serialize(&model_proto)) return false;
-  return true;
-}
-
-bool NaiveCounter::SaveVocab(std::string_view filename) const {
-  LOG(INFO) << "Saving vocabs: " << filename;
-  Model model_proto;
-  if (!Serialize(&model_proto)) return false;
-
-  auto output = NewWritableFile(filename);
-  for (const auto& piece : model_proto.GetPieces()) {
-    std::ostringstream os;
-    os << piece.GetPiece() << "\t" << piece.GetScore();
-    output->WriteLine(os.str());
-  }
-  return true;
 }
 
 }  // namespace piece

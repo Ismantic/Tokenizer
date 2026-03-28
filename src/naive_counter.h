@@ -116,8 +116,6 @@ private:
     bool InitMetaPieces();
     bool LoadSentences();
     void SplitSentencesByWhitespace();
-    bool SaveModel(std::string_view filename) const;
-    bool SaveVocab(std::string_view filename) const;
 
     std::map<int, std::pair<std::string, Model::Piece::Type>> meta_pieces_;
     std::vector<std::pair<std::string, float>> pieces_;

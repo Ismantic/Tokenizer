@@ -144,10 +144,31 @@ void RunDecode(const std::string& model_file) {
     const std::string& method = model.GetCounterSpec().method();
 
     std::string line;
-    if (method == "bytepiece") {
+    if (method == "naive") {
+        NaiveTokenizer tokenizer(model);
+        while (std::getline(std::cin, line)) {
+            std::vector<int> ids;
+            std::istringstream iss(line);
+            int id;
+            while (iss >> id) {
+                ids.push_back(id);
+            }
+            std::cout << tokenizer.Detokenize(ids) << "\n";
+        }
+    } else if (method == "piece") {
+        PieceTokenizer tokenizer(model);
+        while (std::getline(std::cin, line)) {
+            std::vector<int> ids;
+            std::istringstream iss(line);
+            int id;
+            while (iss >> id) {
+                ids.push_back(id);
+            }
+            std::cout << tokenizer.Decode(ids) << "\n";
+        }
+    } else if (method == "bytepiece") {
         BytePieceTokenizer tokenizer(model);
         while (std::getline(std::cin, line)) {
-            // Parse space-separated ids
             std::vector<std::pair<std::string, int>> tokens;
             const auto& pieces = model.GetPieces();
             std::istringstream iss(line);
@@ -174,19 +195,7 @@ void RunDecode(const std::string& model_file) {
             std::cout << tokenizer.Decode(tokens) << "\n";
         }
     } else {
-        // naive/piece: reconstruct from piece strings
-        const auto& pieces = model.GetPieces();
-        while (std::getline(std::cin, line)) {
-            std::istringstream iss(line);
-            int id;
-            std::string result;
-            while (iss >> id) {
-                if (id >= 0 && id < static_cast<int>(pieces.size())) {
-                    result += pieces[id].GetPiece();
-                }
-            }
-            std::cout << result << "\n";
-        }
+        std::cerr << "Unknown method in model: " << method << "\n";
     }
 }
 
