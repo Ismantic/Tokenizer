@@ -5,6 +5,7 @@
 
 #include "piece_spec.h"
 #include "naive_counter.h"
+#include "naive_tokenizer.h"
 #include "piece_counter.h"
 #include "piece_tokenizer.h"
 #include "sentencepiece_counter.h"

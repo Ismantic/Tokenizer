@@ -26,52 +26,6 @@ inline int SizeUTF8(uint8_t c) {
     return 1;
 }
 
-inline bool IsValidUTF8(const std::string& str) {
-    const unsigned char* bytes =
-        reinterpret_cast<const unsigned char*>(str.c_str());
-    const size_t len = str.length();
-
-    for (size_t i = 0; i < len; i++) {
-        if (bytes[i] <= 0x7F) {
-            continue;
-        }
-        if ((bytes[i] & 0xE0) == 0xC0) {
-            if (i + 1 >= len || (bytes[i + 1] & 0xC0) != 0x80) return false;
-            if ((bytes[i] & 0x1E) == 0) return false;
-            i += 1;
-            continue;
-        }
-        if ((bytes[i] & 0xF0) == 0xE0) {
-            if (i + 2 >= len || (bytes[i + 1] & 0xC0) != 0x80 ||
-                (bytes[i + 2] & 0xC0) != 0x80) {
-                return false;
-            }
-            if ((bytes[i] == 0xE0 && (bytes[i + 1] & 0x20) == 0) ||
-                (bytes[i] == 0xED && (bytes[i + 1] & 0x20) == 0x20)) {
-                return false;
-            }
-            i += 2;
-            continue;
-        }
-        if ((bytes[i] & 0xF8) == 0xF0) {
-            if (i + 3 >= len || (bytes[i + 1] & 0xC0) != 0x80 ||
-                (bytes[i + 2] & 0xC0) != 0x80 ||
-                (bytes[i + 3] & 0xC0) != 0x80) {
-                return false;
-            }
-            if ((bytes[i] == 0xF0 && (bytes[i + 1] & 0x30) == 0) ||
-                bytes[i] > 0xF4 ||
-                (bytes[i] == 0xF4 && bytes[i + 1] > 0x8F)) {
-                return false;
-            }
-            i += 3;
-            continue;
-        }
-        return false;
-    }
-    return true;
-}
-
 class BytePieceTokenizer {
 public:
     using EncodeResult = std::vector<std::pair<std::string, int>>;
