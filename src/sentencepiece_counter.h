@@ -24,7 +24,7 @@ public:
 
   SentencePieceCounter(const CounterSpec& counter_spec, 
           const NormalizerSpec& normalizer_spec);
-  virtual ~SentencePieceCounter();
+  ~SentencePieceCounter();
 
 
   bool Count();

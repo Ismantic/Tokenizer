@@ -89,7 +89,17 @@ NaiveTokenizer::EncodeResult NaiveTokenizer::Encode(std::string_view text) const
   return result;
 }
 
-std::string NaiveTokenizer::Detokenize(const std::vector<int>& ids) const {
+std::vector<std::string> NaiveTokenizer::Tokenize(std::string_view text) const {
+  std::vector<std::string> tokens;
+  auto encoded = Encode(text);
+  tokens.reserve(encoded.size());
+  for (const auto& [piece, id] : encoded) {
+    tokens.push_back(piece);
+  }
+  return tokens;
+}
+
+std::string NaiveTokenizer::Decode(const std::vector<int>& ids) const {
   if (!initialized_) {
     throw std::runtime_error("Tokenizer not initialized with a model");
   }
@@ -99,6 +109,15 @@ std::string NaiveTokenizer::Detokenize(const std::vector<int>& ids) const {
     DecodeToken(id, result);
   }
   return result;
+}
+
+std::string NaiveTokenizer::Decode(const EncodeResult& encoded) const {
+  std::vector<int> ids;
+  ids.reserve(encoded.size());
+  for (const auto& [piece, id] : encoded) {
+    ids.push_back(id);
+  }
+  return Decode(ids);
 }
 
 void NaiveTokenizer::ApplyMerges(std::vector<int>& ids) const {

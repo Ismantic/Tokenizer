@@ -153,7 +153,7 @@ void RunDecode(const std::string& model_file) {
             while (iss >> id) {
                 ids.push_back(id);
             }
-            std::cout << tokenizer.Detokenize(ids) << "\n";
+            std::cout << tokenizer.Decode(ids) << "\n";
         }
     } else if (method == "piece") {
         PieceTokenizer tokenizer(model);

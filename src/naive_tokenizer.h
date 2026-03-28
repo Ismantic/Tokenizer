@@ -18,7 +18,9 @@ public:
     float GetScore(int id) const;
     int PieceID(std::string_view piece) const;
     EncodeResult Encode(std::string_view text) const;
-    std::string Detokenize(const std::vector<int>& ids) const;
+    std::vector<std::string> Tokenize(std::string_view text) const;
+    std::string Decode(const std::vector<int>& ids) const;
+    std::string Decode(const EncodeResult& encoded) const;
 
 private:
     void ApplyMerges(std::vector<int>& ids) const;
