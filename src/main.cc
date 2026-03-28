@@ -11,7 +11,7 @@
 #include "sentencepiece_tokenizer.h"
 #include "bytepiece_counter.h"
 #include "bytepiece_tokenizer.h"
-#include "new_normalizer.h"
+#include "normalizer.h"
 
 namespace piece {
 

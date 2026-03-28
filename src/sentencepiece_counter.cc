@@ -10,7 +10,7 @@
 #include <math.h>
 
 #include "common.h"
-#include "new_normalizer.h"
+#include "normalizer.h"
 #include "ustr.h"
 #include "sentence.h"
 #include "misc.h"

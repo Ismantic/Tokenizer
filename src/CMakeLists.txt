@@ -5,7 +5,7 @@ set(LIB_SRCS
     sentence.cc
     sentencepiece_counter.cc
     sentencepiece_tokenizer.cc
-    new_normalizer.cc
+    normalizer.cc
     bytepiece_tokenizer.cc
     bytepiece_counter.cc
     piece_tokenizer.cc

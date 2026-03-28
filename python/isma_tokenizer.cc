@@ -5,7 +5,7 @@
 #include <memory>
 
 #include "piece_spec.h"
-#include "new_normalizer.h"
+#include "normalizer.h"
 #include "naive_counter.h"
 #include "piece_counter.h"
 #include "piece_tokenizer.h"

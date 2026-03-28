@@ -16,7 +16,7 @@
 
 #include "common.h"
 #include "misc.h"
-#include "new_normalizer.h"
+#include "normalizer.h"
 #include "piece_spec.h"
 #include "sentence.h"
 #include "ustr.h"
