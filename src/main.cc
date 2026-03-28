@@ -5,7 +5,8 @@
 
 #include "piece_spec.h"
 #include "naive_counter.h"
-#include "naive_tokenizer.h"
+#include "piece_counter.h"
+#include "piece_tokenizer.h"
 #include "sentencepiece_counter.h"
 #include "sentencepiece_tokenizer.h"
 #include "bytepiece_counter.h"
@@ -20,7 +21,7 @@ void PrintUsage(const char* prog) {
               << "  " << prog << " encode --model <file>\n"
               << "  " << prog << " decode --model <file>\n"
               << "\nTrain options:\n"
-              << "  --method <naive|simple|sentencepiece|bytepiece>  (default: bytepiece)\n"
+              << "  --method <naive|piece|sentencepiece|bytepiece>  (default: bytepiece)\n"
               << "  --input <file>         Input corpus file\n"
               << "  --model <prefix>       Model output prefix (default: tokenizer)\n"
               << "  --vocab-size <int>     Vocabulary size (default: 8000)\n"
@@ -46,7 +47,7 @@ void RunTrain(const std::string& method,
     int size = vocab_size;
     if (method == "bytepiece" || method == "sentencepiece") {
         size = vocab_size + 256 + 3;  // +256 byte tokens +3 control tokens
-    } else if (method == "naive" || method == "simple") {
+    } else if (method == "naive" || method == "piece") {
         size = vocab_size + 3;
     }
     counter_spec.set_vocab_size(size);
@@ -59,8 +60,8 @@ void RunTrain(const std::string& method,
         NaiveCounter counter(counter_spec, normalizer_spec);
         counter.Count();
         counter.Save();
-    } else if (method == "simple") {
-        SimpleCounter counter(counter_spec, normalizer_spec);
+    } else if (method == "piece") {
+        PieceCounter counter(counter_spec, normalizer_spec);
         counter.Count();
         counter.Save();
     } else if (method == "sentencepiece") {
@@ -100,8 +101,8 @@ void RunEncode(const std::string& model_file) {
             }
             std::cout << "\n";
         }
-    } else if (method == "simple") {
-        SimpleTokenizer tokenizer(model);
+    } else if (method == "piece") {
+        PieceTokenizer tokenizer(model);
         while (std::getline(std::cin, line)) {
             auto tokens = tokenizer.Encode(normalizer.Normalize(line));
             for (const auto& t : tokens) {
@@ -172,7 +173,7 @@ void RunDecode(const std::string& model_file) {
             std::cout << tokenizer.Decode(tokens) << "\n";
         }
     } else {
-        // naive/simple: reconstruct from piece strings
+        // naive/piece: reconstruct from piece strings
         const auto& pieces = model.GetPieces();
         while (std::getline(std::cin, line)) {
             std::istringstream iss(line);
