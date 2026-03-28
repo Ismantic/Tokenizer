@@ -113,7 +113,7 @@ $ echo "中华人民共和国成立于1949年" | isma-tokenizer encode --model d
 
 ```
 src/
-  cli.cc                - CLI 程序（train/encode/decode）
+  main.cc               - CLI 程序（train/encode/decode）
   piece_spec.h          - 核心数据结构（Model, CounterSpec, NormalizerSpec）
   naive_counter.h/cc    - 基础 BPE 训练与推理
   naive_tokenizer.h/cc  - 链表优化的 BPE 训练与推理

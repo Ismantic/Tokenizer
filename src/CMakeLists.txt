@@ -15,8 +15,8 @@ set(LIB_SRCS
 add_library(isma_tokenizer_lib ${LIB_SRCS})
 target_include_directories(isma_tokenizer_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
-add_executable(isma-tokenizer cli.cc)
+add_executable(isma-tokenizer main.cc)
 target_link_libraries(isma-tokenizer PRIVATE isma_tokenizer_lib)
 
-add_executable(isma_tokenizer_test main.cc test.cc ustr_test.cc)
+add_executable(isma_tokenizer_test tokenizer_test.cc test.cc ustr_test.cc)
 target_link_libraries(isma_tokenizer_test PRIVATE isma_tokenizer_lib)
