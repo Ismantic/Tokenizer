@@ -2,22 +2,15 @@
 
 #include <algorithm>
 #include <cstdint>
-#include <limits>
-#include <map>
-#include <memory>
 #include <queue>
-#include <stdexcept>
 #include <string>
 #include <unordered_map>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
 #include "common.h"
-#include "misc.h"
 #include "normalizer.h"
 #include "piece_spec.h"
-#include "sentence.h"
 #include "ustr.h"
 
 namespace piece {
@@ -404,16 +397,7 @@ public:
   int PieceID(std::string_view piece) const;
 
 private:
-  struct PairHash {
-    size_t operator()(const std::pair<int, int>& p) const {
-      auto h1 = std::hash<int>{}(p.first);
-      auto h2 = std::hash<int>{}(p.second);
-      return h1 ^ (h2 << 1);
-    }
-  };
-
   using MergeRule = std::pair<std::pair<int, int>, int>;
-  using RuleInfo = std::pair<size_t, int>;
 
   std::string NormalizeText(std::string_view text) const;
   IndexedList<int> BuildInitialTokenList(const std::string& text) const;
@@ -422,15 +406,10 @@ private:
              int new_id,
              IndexedList<int>& indexed_list) const;
   EncodeResult TokenIdsToResult(const IndexedList<int>& token_list) const;
-  void InitFromModel();
-  void BuildMergeRules();
 
   const Model* model_;
   std::vector<MergeRule> merge_rules_;
-  std::unordered_map<std::pair<int, int>, RuleInfo, PairHash> pair_to_rule_;
-  std::unordered_map<int, std::string> vocab_;
   StrToInt pieces_;
-  StrToInt reserve_;
   int unk_id_;
 };
 

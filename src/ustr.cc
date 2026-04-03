@@ -125,40 +125,41 @@ bool IsDigitToken(std::string_view text) {
 }
 
 bool IsPunctuationToken(std::string_view text) {
-    if (text.size() == 1) {
-        char c = text[0];
-        if (c == ',' || c == '.' || c == '!' || c == '?' || c == ';' ||
-            c == ':' || c == '"' || c == '\'' || c == '(' || c == ')' ||
-            c == '[' || c == ']' || c == '{' || c == '}' || c == '-' ||
-            c == '_' || c == '+' || c == '=' || c == '/' || c == '\\' ||
-            c == '<' || c == '>' || c == '~' || c == '@' || c == '#' ||
-            c == '$' || c == '%' || c == '^' || c == '&' || c == '*') {
-            return true;
-        }
-    }
+    if (text.empty()) return false;
+    size_t mblen;
+    const uint32_t cp = DecodeUTF8(text, &mblen);
+    if (mblen == 0 || mblen != text.size()) return false;
 
-    if (text.size() == 3) {
-        unsigned char b1 = static_cast<unsigned char>(text[0]);
-        unsigned char b2 = static_cast<unsigned char>(text[1]);
-        unsigned char b3 = static_cast<unsigned char>(text[2]);
+    // ASCII punctuation: ! " # $ % & ' ( ) * + , - . / : ; < = > ? @ [ \ ] ^ _ ` { | } ~
+    if ((cp >= 0x21 && cp <= 0x2F) ||
+        (cp >= 0x3A && cp <= 0x40) ||
+        (cp >= 0x5B && cp <= 0x60) ||
+        (cp >= 0x7B && cp <= 0x7E)) return true;
 
-        if (b1 == 0xE3 && b2 == 0x80 && (b3 >= 0x80 && b3 <= 0xBF)) return true;
-        if (b1 == 0xEF && b2 == 0xBC && (b3 >= 0x81 && b3 <= 0xBF)) return true;
-        if (b1 == 0xEF && b2 == 0xBD && (b3 >= 0x80 && b3 <= 0x9F)) return true;
-        if (b1 == 0xE3 && b2 == 0x80 && (b3 >= 0x89 && b3 <= 0x9F)) return true;
+    // General Punctuation: U+2000-U+206F (includes — – … ' ' " " ‹ › etc.)
+    if (cp >= 0x2000 && cp <= 0x206F) return true;
 
-        if (b1 == 0xE3 && b2 == 0x80 && b3 == 0x82) return true;
-        if (b1 == 0xEF && b2 == 0xBC && b3 == 0x8C) return true;
-        if (b1 == 0xEF && b2 == 0xBC && b3 == 0x9A) return true;
-        if (b1 == 0xEF && b2 == 0xBC && b3 == 0x9B) return true;
-        if (b1 == 0xEF && b2 == 0xBC && b3 == 0x9C) return true;
-        if (b1 == 0xEF && b2 == 0xBC && b3 == 0x9E) return true;
-        if (b1 == 0xEF && b2 == 0xBC && b3 == 0x81) return true;
-        if (b1 == 0xEF && b2 == 0xBC && b3 == 0x9F) return true;
-        if (b1 == 0xE3 && b2 == 0x80 && b3 == 0x94) return true;
-        if (b1 == 0xE3 && b2 == 0x80 && b3 == 0x95) return true;
-        if (b1 == 0xE3 && b2 == 0x80 && b3 == 0x96) return true;
-    }
+    // Supplemental Punctuation: U+2E00-U+2E7F
+    if (cp >= 0x2E00 && cp <= 0x2E7F) return true;
+
+    // CJK Symbols and Punctuation: U+3000-U+303F (includes 。 「 」 〈 〉 《 》 【 】 etc.)
+    if (cp >= 0x3000 && cp <= 0x303F) return true;
+
+    // CJK Compatibility Forms: U+FE30-U+FE4F
+    if (cp >= 0xFE30 && cp <= 0xFE4F) return true;
+
+    // Small Form Variants: U+FE50-U+FE6F
+    if (cp >= 0xFE50 && cp <= 0xFE6F) return true;
+
+    // Halfwidth and Fullwidth Forms (punctuation part): U+FF01-U+FF0F, U+FF1A-U+FF20,
+    // U+FF3B-U+FF40, U+FF5B-U+FF65
+    if ((cp >= 0xFF01 && cp <= 0xFF0F) ||
+        (cp >= 0xFF1A && cp <= 0xFF20) ||
+        (cp >= 0xFF3B && cp <= 0xFF40) ||
+        (cp >= 0xFF5B && cp <= 0xFF65)) return true;
+
+    // Latin-1 Supplement punctuation: ¡ ¢ £ ¤ ¥ ¦ § ¨ © « ¬ ® ° ± ´ · » ¿ etc.
+    if (cp >= 0x00A1 && cp <= 0x00BF) return true;
 
     return false;
 }

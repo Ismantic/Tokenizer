@@ -3,16 +3,33 @@
 namespace piece {
 
 PieceTokenizer::PieceTokenizer(const Model& model) : model_(&model) {
-  InitFromModel();
+  const auto& counter_spec = model_->GetCounterSpec();
+  unk_id_ = counter_spec.unk_id();
+
+  for (size_t i = 0; i < model_->PiecesSize(); ++i) {
+    const auto& piece = model_->GetPieces(i);
+    pieces_[piece.GetPiece()] = i;
+
+    const std::string& u = piece.u();
+    const std::string& v = piece.v();
+    if (!u.empty() && !v.empty()) {
+      int u_id = PieceID(u);
+      int v_id = PieceID(v);
+      if (u_id >= 0 && v_id >= 0) {
+        merge_rules_.emplace_back(std::pair<int, int>(u_id, v_id),
+                                  static_cast<int>(i));
+      }
+    }
+  }
+
+  LOG(INFO) << "Building merge rules from model with "
+            << model_->PiecesSize() << " pieces, "
+            << merge_rules_.size() << " merge rules";
 }
 
 PieceTokenizer::~PieceTokenizer() = default;
 
 PieceTokenizer::EncodeResult PieceTokenizer::Encode(std::string_view text) const {
-  if (!model_) {
-    throw std::runtime_error("Tokenizer not initialized with a model");
-  }
-
   std::string normalized_text = NormalizeText(text);
   auto token_list = BuildInitialTokenList(normalized_text);
   ApplyMergeRules(token_list);
@@ -30,10 +47,6 @@ std::vector<std::string> PieceTokenizer::Tokenize(std::string_view text) const {
 }
 
 std::string PieceTokenizer::Decode(const std::vector<int>& ids) const {
-  if (!model_) {
-    throw std::runtime_error("Tokenizer not initialized with a model");
-  }
-
   std::string result;
   for (int id : ids) {
     if (id < 0 || id >= static_cast<int>(model_->PiecesSize())) {
@@ -75,17 +88,8 @@ std::string PieceTokenizer::Decode(const EncodeResult& rs) const {
 }
 
 int PieceTokenizer::PieceID(std::string_view piece) const {
-  const auto reserve_it = reserve_.find(piece);
-  if (reserve_it != reserve_.end()) {
-    return reserve_it->second;
-  }
-
-  const auto piece_it = pieces_.find(piece);
-  if (piece_it != pieces_.end()) {
-    return piece_it->second;
-  }
-
-  return unk_id_;
+  const auto it = pieces_.find(piece);
+  return it != pieces_.end() ? it->second : unk_id_;
 }
 
 std::string PieceTokenizer::NormalizeText(std::string_view text) const {
@@ -111,23 +115,14 @@ IndexedList<int> PieceTokenizer::BuildInitialTokenList(
 }
 
 void PieceTokenizer::ApplyMergeRules(IndexedList<int>& token_list) const {
-  bool found_merge;
-  do {
-    found_merge = false;
-    for (auto it = token_list.begin(); it != token_list.end(); ++it) {
-      auto* node = *it;
-      if (!node || !node->next) continue;
-
-      std::pair<int, int> pair(node->value, node->next->value);
-      auto rule_it = pair_to_rule_.find(pair);
-      if (rule_it != pair_to_rule_.end()) {
-        int merged_id = rule_it->second.second;
-        Merge(pair, merged_id, token_list);
-        found_merge = true;
-        break;
-      }
+  for (const auto& rule : merge_rules_) {
+    const auto& pair = rule.first;
+    int merged_id = rule.second;
+    auto& nodes = token_list.GetIndex(pair);
+    if (!nodes.empty()) {
+      Merge(pair, merged_id, token_list);
     }
-  } while (found_merge);
+  }
 }
 
 void PieceTokenizer::Merge(const std::pair<int, int>& pair,
@@ -173,64 +168,6 @@ PieceTokenizer::EncodeResult PieceTokenizer::TokenIdsToResult(
   }
 
   return result;
-}
-
-void PieceTokenizer::InitFromModel() {
-  if (!model_) {
-    throw std::runtime_error("No model provided for initialization");
-  }
-
-  merge_rules_.clear();
-  pair_to_rule_.clear();
-  vocab_.clear();
-  pieces_.clear();
-  reserve_.clear();
-
-  const auto& counter_spec = model_->GetCounterSpec();
-  unk_id_ = counter_spec.unk_id();
-
-  for (size_t i = 0; i < model_->PiecesSize(); ++i) {
-    const auto& piece = model_->GetPieces(i);
-    const std::string& piece_str = piece.GetPiece();
-    pieces_[piece_str] = i;
-    vocab_[i] = piece_str;
-
-    if (piece.GetType() != Model::Piece::NORMAL) {
-      reserve_[piece_str] = i;
-    }
-  }
-
-  BuildMergeRules();
-}
-
-void PieceTokenizer::BuildMergeRules() {
-  merge_rules_.clear();
-  pair_to_rule_.clear();
-
-  LOG(INFO) << "Building merge rules from model with "
-            << model_->PiecesSize() << " pieces";
-
-  for (size_t i = 0; i < model_->PiecesSize(); ++i) {
-    const auto& piece = model_->GetPieces(i);
-    if (piece.GetType() != Model::Piece::NORMAL) {
-      continue;
-    }
-
-    const std::string& u = piece.u();
-    const std::string& v = piece.v();
-    if (!u.empty() && !v.empty()) {
-      int u_id = PieceID(u);
-      int v_id = PieceID(v);
-      if (u_id >= 0 && v_id >= 0) {
-        std::pair<int, int> token_pair(u_id, v_id);
-        size_t rule_idx = merge_rules_.size();
-        merge_rules_.emplace_back(token_pair, static_cast<int>(i));
-        pair_to_rule_[token_pair] = {rule_idx, static_cast<int>(i)};
-      }
-    }
-  }
-
-  LOG(INFO) << "Total merge rules: " << merge_rules_.size();
 }
 
 }  // namespace piece

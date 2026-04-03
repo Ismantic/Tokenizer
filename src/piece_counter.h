@@ -37,10 +37,11 @@ private:
   void SplitSentencesByWhitespace();
   static IndexedList<int> BuildIndexedList(const std::string& text);
   static Multiset<std::pair<int, int>> InitPairsStats(
-      const std::vector<std::string>& texts);
+      const Sentences& sentences);
   static void Merge(const std::pair<int, int>& pair,
                     int new_id,
                     IndexedList<int>& indexed_list,
+                    int64_t freq,
                     Multiset<std::pair<int, int>>* stats);
 
   std::map<int, std::pair<std::string, Model::Piece::Type>> meta_pieces_;
@@ -48,9 +49,7 @@ private:
   Sentences sentences_;
   CounterSpec counter_spec_;
   NormalizerSpec normalizer_spec_;
-  std::vector<std::pair<std::pair<int, int>, int>> merge_tree_;
   std::unordered_map<int, std::string> vocab_;
-  int vocab_size_;
 };
 
 }  // namespace piece

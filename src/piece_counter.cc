@@ -1,14 +1,11 @@
 #include "piece_counter.h"
 
-#include <iostream>
-
 namespace piece {
 
 PieceCounter::PieceCounter(const CounterSpec& counter_spec,
                            const NormalizerSpec& normalizer_spec)
     : counter_spec_(counter_spec),
-      normalizer_spec_(normalizer_spec),
-      vocab_size_(counter_spec.vocab_size()) {
+      normalizer_spec_(normalizer_spec) {
   InitMetaPieces();
 }
 
@@ -22,28 +19,22 @@ bool PieceCounter::Count() {
 
   SplitSentencesByWhitespace();
 
-  std::vector<std::string> texts;
-  for (const auto& sentence : sentences_) {
-    texts.push_back(sentence.first);
-  }
-
-  merge_tree_.clear();
-  auto stats = InitPairsStats(texts);
+  auto stats = InitPairsStats(sentences_);
   std::vector<IndexedList<int>> indexed_lists;
-  indexed_lists.reserve(texts.size());
-  for (const auto& text : texts) {
-    indexed_lists.push_back(BuildIndexedList(text));
+  indexed_lists.reserve(sentences_.size());
+  for (const auto& sentence : sentences_) {
+    indexed_lists.push_back(BuildIndexedList(sentence.first));
   }
 
-  const int num_merges = vocab_size_ - meta_pieces_.size();
+  const int num_merges = counter_spec_.vocab_size() - meta_pieces_.size();
   LOG(INFO) << "Starting BBPE training with " << num_merges << " merges";
 
   int cnt = 0;
   for (int i = 0; i < 256; i++) {
     std::string t(1, i);
     vocab_[i] = t;
-    std::vector<std::string> vec = {t, "", ""};
-    pieces_.emplace_back(std::make_pair(vec, 1));
+    pieces_.emplace_back(std::vector<std::string>{t, "", ""},
+                         -static_cast<float>(i));
     cnt += 1;
   }
 
@@ -51,23 +42,22 @@ bool PieceCounter::Count() {
     auto top = stats.Top();
     const int n = stats.GetCount(top);
     const int new_id = vocab_.size();
-    merge_tree_.emplace_back(top, new_id);
     vocab_[new_id] = vocab_[top.first] + vocab_[top.second];
 
     std::string p = vocab_[new_id];
     std::string u = vocab_[top.first];
     std::string v = vocab_[top.second];
-    std::vector<std::string> vec = {p, u, v};
-    pieces_.emplace_back(std::make_pair(vec, n));
+    pieces_.emplace_back(std::vector<std::string>{p, u, v},
+                         -static_cast<float>(pieces_.size()));
 
-    for (auto& list : indexed_lists) {
-      Merge(top, new_id, list, &stats);
+    for (size_t j = 0; j < indexed_lists.size(); ++j) {
+      Merge(top, new_id, indexed_lists[j], sentences_[j].second, &stats);
     }
 
     if (cnt % 10 == 0) {
       LOG(INFO) << "Merge " << cnt + 1 << "/" << num_merges
                 << ": (" << top.first << "," << top.second
-                << ") -> " << new_id << " (" << vocab_[new_id]
+                << ") -> " << new_id << " (" << Escape(vocab_[new_id])
                 << ") had " << n << " occurrences";
     }
 
@@ -148,13 +138,12 @@ bool PieceCounter::InitMetaPieces() {
 bool PieceCounter::LoadSentences() {
   LOG(INFO) << "Loading sentences ...";
 
-  auto iter_ = std::make_unique<MultiFileSentenceIterator>(
+  auto iter = std::make_unique<MultiFileSentenceIterator>(
       std::vector<std::string>(counter_spec_.input().begin(),
                                counter_spec_.input().end()));
-  SentenceIterator* sentence_iterator_ = iter_.get();
 
-  for (; !sentence_iterator_->done(); sentence_iterator_->Next()) {
-    std::string sentence = sentence_iterator_->value();
+  for (; !iter->done(); iter->Next()) {
+    const std::string& sentence = iter->value();
     if (sentence.empty()) {
       continue;
     }
@@ -195,16 +184,17 @@ IndexedList<int> PieceCounter::BuildIndexedList(const std::string& text) {
 }
 
 Multiset<std::pair<int, int>> PieceCounter::InitPairsStats(
-    const std::vector<std::string>& texts) {
+    const Sentences& sentences) {
   Multiset<std::pair<int, int>> stats;
   std::vector<int> bytes;
-  for (const auto& text : texts) {
+  for (const auto& sentence : sentences) {
     bytes.clear();
-    for (uint8_t c : text) {
+    for (uint8_t c : sentence.first) {
       bytes.push_back(static_cast<int>(c));
     }
+    const int freq = sentence.second;
     for (size_t i = 0; i + 1 < bytes.size(); i++) {
-      stats.Insert({bytes[i], bytes[i + 1]});
+      stats.Insert({bytes[i], bytes[i + 1]}, freq);
     }
   }
   return stats;
@@ -213,6 +203,7 @@ Multiset<std::pair<int, int>> PieceCounter::InitPairsStats(
 void PieceCounter::Merge(const std::pair<int, int>& pair,
                          int new_id,
                          IndexedList<int>& indexed_list,
+                         int64_t freq,
                          Multiset<std::pair<int, int>>* stats) {
   auto& nodes = indexed_list.GetIndex(pair);
   for (auto* node : nodes) {
@@ -226,14 +217,14 @@ void PieceCounter::Merge(const std::pair<int, int>& pair,
     indexed_list.RemoveIndex(node->next);
 
     if (stats != nullptr) {
-      stats->Remove(pair);
+      stats->Remove(pair, freq);
       if (node->next->next != nullptr) {
-        stats->Remove({node->next->value, node->next->next->value});
-        stats->Insert({new_id, node->next->next->value});
+        stats->Remove({node->next->value, node->next->next->value}, freq);
+        stats->Insert({new_id, node->next->next->value}, freq);
       }
       if (node->prev != nullptr) {
-        stats->Remove({node->prev->value, pair.first});
-        stats->Insert({node->prev->value, new_id});
+        stats->Remove({node->prev->value, pair.first}, freq);
+        stats->Insert({node->prev->value, new_id}, freq);
       }
     }
 
