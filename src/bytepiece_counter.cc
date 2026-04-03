@@ -443,8 +443,7 @@ BytePieceCounter::Str2Int BytePieceCounter::PrunePieces(Str2Int& pieces) {
 
   Str2Int keep, drop;
   for (const auto& [str, cnt] : pieces) {
-    if (str.length() == 1 ||
-        (str.length() <= max_piece_size_ && cnt >= counter_spec_.min_count())) {
+    if (str.length() <= max_piece_size_ && cnt >= counter_spec_.min_count()) {
       keep[str] = cnt;
     } else {
       drop[str] = cnt;
