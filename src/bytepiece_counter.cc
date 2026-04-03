@@ -3,6 +3,8 @@
 #include <cmath>
 #include <future>
 
+#include "normalizer.h"
+
 namespace piece {
 
 BytePieceCounter::BytePieceCounter(const CounterSpec& counter_spec,
@@ -10,7 +12,6 @@ BytePieceCounter::BytePieceCounter(const CounterSpec& counter_spec,
     : counter_spec_(counter_spec),
       normalizer_spec_(normalizer_spec) {
   InitMetaPieces();
-  InitT();
   N_.resize(max_piece_count_ + 1);
 }
 
@@ -83,7 +84,7 @@ bool BytePieceCounter::Serialize(Model* model) const {
   return true;
 }
 
-size_t BytePieceCounter::GetWorkerCount(size_t work_items) const {
+size_t BytePieceCounter::GetCpuCount(size_t work_items) const {
   if (work_items <= 1) {
     return 1;
   }
@@ -139,6 +140,9 @@ bool BytePieceCounter::StreamCountRaw() {
   N_.clear();
   N_.resize(max_piece_count_ + 1);
 
+  const Normalizer normalizer(normalizer_spec_);
+  const std::string_view space = normalizer_spec_.GetSpace();
+
   auto iter = MakeIterator();
   size_t line_count = 0;
   constexpr size_t kBatchLines = 1000000;
@@ -149,7 +153,8 @@ bool BytePieceCounter::StreamCountRaw() {
     for (; !iter->done() && lines < kBatchLines; iter->Next(), ++lines) {
       const std::string& line = iter->value();
       if (line.empty()) continue;
-      for (std::string_view word : ustr::SplitWords(line)) {
+      std::string normalized = normalizer.Normalize(line);
+      for (std::string_view word : ustr::SplitText(normalized, space)) {
         batch.emplace_back(word);
       }
     }
@@ -226,7 +231,7 @@ void BytePieceCounter::PruneRaw() {
   for (int i = N_.size() - 1; i >= 0; --i) {
     std::unordered_map<std::string, float_t> pruned;
     for (const auto& [k, v] : N_[i]) {
-      if (k.length() == i && v >= (i > 1 ? min_count_ : 0)) {
+      if (k.length() == i && v >= (i > 1 ? counter_spec_.min_count() : 0)) {
         pruned[k] = std::log(v);
       }
     }
@@ -364,6 +369,9 @@ BytePieceCounter::Str2Int BytePieceCounter::StreamCountPieces() {
   LOG(INFO) << "Pass 2: counting pieces...";
   Str2Int total_pieces;
 
+  const Normalizer normalizer(normalizer_spec_);
+  const std::string_view space = normalizer_spec_.GetSpace();
+
   auto iter = MakeIterator();
   size_t line_count = 0;
   std::vector<std::string> buffer;
@@ -388,7 +396,8 @@ BytePieceCounter::Str2Int BytePieceCounter::StreamCountPieces() {
   for (; !iter->done(); iter->Next()) {
     const std::string& line = iter->value();
     if (line.empty()) continue;
-    for (std::string_view word : ustr::SplitWords(line)) {
+    std::string normalized = normalizer.Normalize(line);
+    for (std::string_view word : ustr::SplitText(normalized, space)) {
       buffer.emplace_back(word);
     }
     if (buffer.size() >= flush_size) {
@@ -435,7 +444,7 @@ BytePieceCounter::Str2Int BytePieceCounter::PrunePieces(Str2Int& pieces) {
   Str2Int keep, drop;
   for (const auto& [str, cnt] : pieces) {
     if (str.length() == 1 ||
-        (str.length() <= max_piece_size_ && cnt >= min_count_)) {
+        (str.length() <= max_piece_size_ && cnt >= counter_spec_.min_count())) {
       keep[str] = cnt;
     } else {
       drop[str] = cnt;
@@ -484,18 +493,19 @@ BytePieceCounter::Str2Int BytePieceCounter::PrunePieces(Str2Int& pieces) {
   return new_pieces;
 }
 
-void BytePieceCounter::InitT() {
-  int num_ = max_piece_count_;
-  T_.resize(num_, std::vector<float_t>(num_, -INF));
-  for (int i = 0; i < num_; ++i) {
-    T_[i][0] = 0;
-    if (i + 1 < num_) {
-      T_[i][i + 1] = 0;
+const std::vector<std::vector<float_t>> BytePieceCounter::T_ = [] {
+  const int n = max_piece_count_;
+  std::vector<std::vector<float_t>> t(n, std::vector<float_t>(n, -INF));
+  for (int i = 0; i < n; ++i) {
+    t[i][0] = 0;
+    if (i + 1 < n) {
+      t[i][i + 1] = 0;
     }
-    if (i == num_ - 1) {
-      T_[i][i] = 0;
+    if (i == n - 1) {
+      t[i][i] = 0;
     }
   }
-}
+  return t;
+}();
 
 }  // namespace piece

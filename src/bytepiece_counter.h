@@ -28,7 +28,7 @@ public:
 private:
     using Str2Int = std::unordered_map<std::string, int>;
 
-    size_t GetWorkerCount(size_t work_items) const;
+    size_t GetCpuCount(size_t work_items) const;
 
     template <typename Map>
     static void MergeCounts(Map* dest, const Map& src) {
@@ -44,7 +44,7 @@ private:
             return merged;
         }
 
-        const size_t workers = GetWorkerCount((total + batch_size - 1) / batch_size);
+        const size_t workers = GetCpuCount((total + batch_size - 1) / batch_size);
         if (workers <= 1) {
             return count_fn(0, total);
         }
@@ -85,7 +85,6 @@ private:
     Str2Int StreamCountPieces();
     Str2Int SplitPieces(const Str2Int& keep, const Str2Int& drop);
     Str2Int PrunePieces(Str2Int& pieces);
-    void InitT();
     
     std::map<int, std::pair<std::string, Model::Piece::Type>> meta_pieces_;
     std::vector<std::pair<std::string, float>> pieces_;
@@ -94,9 +93,8 @@ private:
     
     static constexpr size_t max_piece_count_ = 6;
     static constexpr size_t max_piece_size_ = 18;
-    static constexpr size_t min_count_ = 2;
     static constexpr float_t INF = std::numeric_limits<float_t>::infinity();
-    std::vector<std::vector<float_t>> T_;
+    static const std::vector<std::vector<float_t>> T_;
     std::vector<std::unordered_map<std::string, float_t>> N_;
 };
 

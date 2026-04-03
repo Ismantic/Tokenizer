@@ -18,16 +18,18 @@ namespace piece {
 
 void PrintUsage(const char* prog) {
     std::cerr << "Usage:\n"
-              << "  " << prog << " train [options]\n"
+              << "  " << prog << " count [options]\n"
+              << "  " << prog << " tokenize --model <file>\n"
               << "  " << prog << " encode --model <file>\n"
               << "  " << prog << " decode --model <file>\n"
-              << "\nTrain options:\n"
+              << "\nCount options:\n"
               << "  --method <naive|piece|sentencepiece|bytepiece>  (default: bytepiece)\n"
               << "  --input <file>         Input corpus file\n"
               << "  --model <prefix>       Model output prefix (default: tokenizer)\n"
               << "  --vocab-size <int>     Vocabulary size (default: 8000)\n"
               << "  --normalize <name>     Normalizer: identity|NMT_NFKC (default: identity)\n"
-              << "\nEncode/Decode read from stdin, write to stdout.\n"
+              << "\nTokenize/Encode/Decode read from stdin, write to stdout.\n"
+              << "Tokenize outputs space-separated pieces per line.\n"
               << "Encode outputs one token per line (piece TAB id).\n"
               << "Decode reads token ids (space-separated) and outputs text.\n";
 }
@@ -56,7 +58,7 @@ void RunTrain(const std::string& method,
     counter_spec.set_vocab_size(size);
 
     for (const auto& f : inputs)
-        std::cerr << "Training: method=" << method << " input=" << f
+        std::cerr << "Counting: method=" << method << " input=" << f
                   << " vocab_size=" << vocab_size << " model=" << model_prefix << "\n";
 
     if (method == "naive") {
@@ -136,6 +138,63 @@ void RunEncode(const std::string& model_file) {
     }
 }
 
+void RunTokenize(const std::string& model_file) {
+    Model model;
+    if (!model.Load(model_file)) {
+        std::cerr << "Error: cannot load model: " << model_file << "\n";
+        return;
+    }
+
+    const std::string& method = model.GetCounterSpec().method();
+    const auto& normalizer_spec = model.GetNormalizerSpec();
+    Normalizer normalizer(normalizer_spec);
+
+    std::string line;
+    if (method == "naive") {
+        NaiveTokenizer tokenizer(model);
+        while (std::getline(std::cin, line)) {
+            auto tokens = tokenizer.Tokenize(line);
+            for (size_t i = 0; i < tokens.size(); ++i) {
+                if (i > 0) std::cout << " ";
+                std::cout << tokens[i];
+            }
+            std::cout << "\n";
+        }
+    } else if (method == "piece") {
+        PieceTokenizer tokenizer(model);
+        while (std::getline(std::cin, line)) {
+            auto tokens = tokenizer.Tokenize(normalizer.Normalize(line));
+            for (size_t i = 0; i < tokens.size(); ++i) {
+                if (i > 0) std::cout << " ";
+                std::cout << tokens[i];
+            }
+            std::cout << "\n";
+        }
+    } else if (method == "sentencepiece") {
+        SentencePieceTokenizer tokenizer(model);
+        while (std::getline(std::cin, line)) {
+            auto tokens = tokenizer.Tokenize(line);
+            for (size_t i = 0; i < tokens.size(); ++i) {
+                if (i > 0) std::cout << " ";
+                std::cout << tokens[i];
+            }
+            std::cout << "\n";
+        }
+    } else if (method == "bytepiece") {
+        BytePieceTokenizer tokenizer(model);
+        while (std::getline(std::cin, line)) {
+            auto tokens = tokenizer.Tokenize(line);
+            for (size_t i = 0; i < tokens.size(); ++i) {
+                if (i > 0) std::cout << " ";
+                std::cout << tokens[i];
+            }
+            std::cout << "\n";
+        }
+    } else {
+        std::cerr << "Unknown method in model: " << method << "\n";
+    }
+}
+
 void RunDecode(const std::string& model_file) {
     Model model;
     if (!model.Load(model_file)) {
@@ -205,7 +264,7 @@ int main(int argc, char* argv[]) {
 
     std::string command = argv[1];
 
-    if (command == "train") {
+    if (command == "count") {
         std::string method = "bytepiece";
         std::vector<std::string> inputs;
         std::string model_prefix = "tokenizer";
@@ -231,13 +290,13 @@ int main(int argc, char* argv[]) {
         }
 
         if (inputs.empty()) {
-            std::cerr << "Error: --input is required for train\n";
+            std::cerr << "Error: --input is required for count\n";
             return 1;
         }
 
         piece::RunTrain(method, inputs, model_prefix, vocab_size, normalizer);
 
-    } else if (command == "encode" || command == "decode") {
+    } else if (command == "tokenize" || command == "encode" || command == "decode") {
         std::string model_file;
 
         for (int i = 2; i < argc; i++) {
@@ -251,7 +310,9 @@ int main(int argc, char* argv[]) {
             return 1;
         }
 
-        if (command == "encode") {
+        if (command == "tokenize") {
+            piece::RunTokenize(model_file);
+        } else if (command == "encode") {
             piece::RunEncode(model_file);
         } else {
             piece::RunDecode(model_file);

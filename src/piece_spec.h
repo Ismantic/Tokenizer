@@ -114,6 +114,7 @@ public:
     std::string method_ = "bytepiece";
     int32_t vocab_size_ = 8000;
     float character_coverage_ = 0.9995f;
+    int32_t min_count_ = 32;
     
     int32_t unk_id_ = 0;
     int32_t bos_id_ = 1;
@@ -139,6 +140,9 @@ public:
     
     float character_coverage() const { return character_coverage_; }
     void set_character_coverage(float coverage) { character_coverage_ = coverage; }
+
+    int32_t min_count() const { return min_count_; }
+    void set_min_count(int32_t count) { min_count_ = count; }
     
     int32_t unk_id() const { return unk_id_; }
     int32_t bos_id() const { return bos_id_; }
@@ -165,6 +169,7 @@ public:
         oss << "method=" << method_ << "\n";
         oss << "vocab_size=" << vocab_size_ << "\n";
         oss << "character_coverage=" << character_coverage_ << "\n";
+        oss << "min_count=" << min_count_ << "\n";
 
         oss << "unk_id=" << unk_id_ << "\n";
         oss << "bos_id=" << bos_id_ << "\n";
@@ -199,6 +204,8 @@ public:
                 vocab_size_ = std::stoi(value);
             } else if (key == "character_coverage") {
                 character_coverage_ = std::stof(value);
+            } else if (key == "min_count") {
+                min_count_ = std::stoi(value);
             } else if (key == "unk_unicode") {
                 unk_unicode_ = std::stoul(value);
             } else if (key == "unk_id") {
