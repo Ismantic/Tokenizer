@@ -1,22 +1,15 @@
 #pragma once 
 
-#include <algorithm>
-#include <cstdint>
-#include <map>
-#include <memory>
 #include <string>
 #include <vector>
 
 #include "common.h"
-#include "misc.h"
-#include "normalizer.h"
 #include "piece_spec.h"
 #include "sentence.h"
-#include "ustr.h"
 
 namespace piece {
-constexpr size_t INITAL_VOCAB_SIZE = 256;
-constexpr size_t MAX_TEXT_SIZE = 1024;
+constexpr int INITIAL_VOCAB_SIZE = 256;
+constexpr size_t MAX_TEXT_SIZE = 1024 * 1024;
 
 struct IntPair {
     int first;
@@ -30,11 +23,6 @@ struct IntPair {
 struct Merge {
     IntPair pair;
     int idx;
-};
-
-struct NaiveModel {
-    std::vector<Merge> merges;
-    std::vector<std::vector<uint8_t>> vocab;
 };
 
 namespace naive {
@@ -86,21 +74,12 @@ namespace naive {
         ids = std::move(new_ids);
     }
 
-    inline size_t GetPairIndex(const std::vector<Merge>& merges, const IntPair& pair) {
-        auto it = std::find_if(merges.begin(), merges.end(),
-            [&pair](const Merge& m) {return m.pair == pair;});
-        
-        return it != merges.end() ?
-            std::distance(merges.begin(), it) :
-            merges.size();
-    }
 } // namespace naive
 
 
 class NaiveCounter {
 public:
-    NaiveCounter(const CounterSpec& counter_spec,
-                 const NormalizerSpec& normalizer_spec);
+    explicit NaiveCounter(const CounterSpec& counter_spec);
     ~NaiveCounter();
 
     bool Count();
@@ -108,26 +87,12 @@ public:
     bool Serialize(Model* model) const;
 
 private:
-    using Sentence = std::pair<std::string, int64_t>;
-    using Sentences = std::vector<Sentence>;
-
-    void InitializeVocab();
     void DecodeToken(int id, std::string& text) const;
-    bool InitMetaPieces();
-    bool LoadSentences();
-    void SplitSentencesByWhitespace();
 
-    std::map<int, std::pair<std::string, Model::Piece::Type>> meta_pieces_;
-    std::vector<std::pair<std::string, float>> pieces_;
-    Sentences sentences_;
+    std::vector<std::vector<std::string>> pieces_;
     CounterSpec counter_spec_;
-    NormalizerSpec normalizer_spec_;
 
     std::vector<Merge> merges_;
-    std::vector<std::vector<uint8_t>> vocab_;
-
-    static constexpr int INITAL_VOCAB_SIZE = 256;
-    static constexpr size_t MAX_TEXT_SIZE = 1024 * 1024;
 };
 
 } // namespace piece
