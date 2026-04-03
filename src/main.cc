@@ -48,8 +48,10 @@ void RunTrain(const std::string& method,
     int size = vocab_size;
     if (method == "bytepiece" || method == "sentencepiece") {
         size = vocab_size + 256 + 3;  // +256 byte tokens +3 control tokens
-    } else if (method == "naive" || method == "piece") {
+    } else if (method == "piece") {
         size = vocab_size + 3;
+    } else if (method == "naive") {
+        size = vocab_size;
     }
     counter_spec.set_vocab_size(size);
 
@@ -58,7 +60,7 @@ void RunTrain(const std::string& method,
                   << " vocab_size=" << vocab_size << " model=" << model_prefix << "\n";
 
     if (method == "naive") {
-        NaiveCounter counter(counter_spec, normalizer_spec);
+        NaiveCounter counter(counter_spec);
         counter.Count();
         counter.Save();
     } else if (method == "piece") {
@@ -96,7 +98,7 @@ void RunEncode(const std::string& model_file) {
     if (method == "naive") {
         NaiveTokenizer tokenizer(model);
         while (std::getline(std::cin, line)) {
-            auto tokens = tokenizer.Encode(normalizer.Normalize(line));
+            auto tokens = tokenizer.Encode(line);
             for (const auto& t : tokens) {
                 std::cout << t.first << "\t" << t.second << "\n";
             }
