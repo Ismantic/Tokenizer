@@ -132,7 +132,7 @@ std::unique_ptr<MultiFileSentenceIterator> BytePieceCounter::MakeIterator() cons
 }
 
 bool BytePieceCounter::StreamCountRaw() {
-  const size_t workers = std::min<size_t>(std::thread::hardware_concurrency(), 8);
+  const size_t workers = std::min<size_t>(GetCpuCount(8), 4);
   LOG(INFO) << "Pass 1: counting substrings with " << workers << " workers...";
 
   using NMaps = std::vector<std::unordered_map<std::string, float_t>>;
