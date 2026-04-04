@@ -132,7 +132,7 @@ std::unique_ptr<MultiFileSentenceIterator> BytePieceCounter::MakeIterator() cons
 }
 
 bool BytePieceCounter::StreamCountRaw() {
-  const size_t workers = std::min<size_t>(GetCpuCount(8), 4);
+  const size_t workers = GetCpuCount(counter_spec_.cpu_count());
   LOG(INFO) << "Pass 1: counting substrings with " << workers << " workers...";
 
   using NMaps = std::vector<std::unordered_map<std::string, float_t>>;
@@ -366,7 +366,9 @@ std::vector<std::string> BytePieceCounter::Tokenize(const std::string& text) con
 }
 
 BytePieceCounter::Str2Int BytePieceCounter::StreamCountPieces() {
-  LOG(INFO) << "Pass 2: counting pieces...";
+  const size_t workers = GetCpuCount(counter_spec_.cpu_count());
+  LOG(INFO) << "Pass 2: counting pieces with " << workers << " workers...";
+
   Str2Int total_pieces;
 
   const Normalizer normalizer(normalizer_spec_);
@@ -374,41 +376,61 @@ BytePieceCounter::Str2Int BytePieceCounter::StreamCountPieces() {
 
   auto iter = MakeIterator();
   size_t line_count = 0;
-  std::vector<std::string> buffer;
-  const size_t flush_size = 50000;
+  constexpr size_t kBatchLines = 1000000;
 
-  auto flush = [&]() {
-    if (buffer.empty()) return;
-    Str2Int batch = ParallelBatchCount<Str2Int>(
-        buffer.size(), 2048, [&](size_t begin, size_t end) {
-          Str2Int counts;
-          for (size_t i = begin; i < end; ++i) {
-            for (const auto& piece : Tokenize(buffer[i])) {
-              if (!piece.empty()) counts[piece] += 1;
-            }
-          }
-          return counts;
-        });
-    MergeCounts(&total_pieces, batch);
-    buffer.clear();
+  auto fill_batch = [&](std::vector<std::string>& batch) -> size_t {
+    batch.clear();
+    size_t lines = 0;
+    for (; !iter->done() && lines < kBatchLines; iter->Next(), ++lines) {
+      const std::string& line = iter->value();
+      if (!line.empty()) {
+        batch.emplace_back(line);
+      }
+    }
+    return lines;
   };
 
-  for (; !iter->done(); iter->Next()) {
-    const std::string& line = iter->value();
-    if (line.empty()) continue;
-    std::string normalized = normalizer.Normalize(line);
-    for (std::string_view word : ustr::SplitText(normalized, space)) {
-      buffer.emplace_back(word);
+  auto process_batch = [&](std::vector<std::string>& batch) {
+    if (batch.empty()) return;
+    std::vector<Str2Int> per_thread(workers);
+
+    std::vector<std::thread> threads;
+    const size_t chunk = (batch.size() + workers - 1) / workers;
+    for (size_t w = 0; w < workers; ++w) {
+      const size_t begin = w * chunk;
+      const size_t end = std::min(batch.size(), begin + chunk);
+      if (begin >= end) break;
+      threads.emplace_back([&, begin, end, w]() {
+        auto& local_counts = per_thread[w];
+        for (size_t idx = begin; idx < end; ++idx) {
+          std::string normalized = normalizer.Normalize(batch[idx]);
+          for (std::string_view word : ustr::SplitText(normalized, space)) {
+            for (const auto& piece : Tokenize(std::string(word))) {
+              if (!piece.empty()) local_counts[piece] += 1;
+            }
+          }
+        }
+      });
     }
-    if (buffer.size() >= flush_size) {
-      flush();
+    for (auto& t : threads) t.join();
+
+    for (auto& local_counts : per_thread) {
+      MergeCounts(&total_pieces, local_counts);
     }
-    if (++line_count % 1000000 == 0) {
-      LOG(INFO) << "Pass 2: " << line_count << " lines, "
-                << total_pieces.size() << " pieces";
-    }
+  };
+
+  std::vector<std::string> work_batch, read_batch;
+  line_count += fill_batch(work_batch);
+
+  while (!work_batch.empty()) {
+    auto read_future =
+        std::async(std::launch::async, [&]() { return fill_batch(read_batch); });
+    process_batch(work_batch);
+    line_count += read_future.get();
+    LOG(INFO) << "Pass 2: " << line_count << " lines, "
+              << total_pieces.size() << " pieces";
+    std::swap(work_batch, read_batch);
   }
-  flush();
 
   LOG(INFO) << "Pass 2 done: " << total_pieces.size() << " unique pieces";
   return total_pieces;
@@ -422,19 +444,12 @@ BytePieceCounter::Str2Int BytePieceCounter::SplitPieces(const Str2Int& keep,
   }
 
   BytePieceTokenizer tokenizer(dict);
-  std::vector<std::pair<std::string, int>> drop_entries(drop.begin(), drop.end());
-  const size_t batch_size = 1024;
-  Str2Int counter = ParallelBatchCount<Str2Int>(
-      drop_entries.size(), batch_size, [&](size_t begin, size_t end) {
-        Str2Int batch_counts;
-        for (size_t idx = begin; idx < end; ++idx) {
-          const auto& [str, cnt] = drop_entries[idx];
-          for (const auto& token : tokenizer.Tokenize(str)) {
-            batch_counts[token] += cnt;
-          }
-        }
-        return batch_counts;
-      });
+  Str2Int counter;
+  for (const auto& [str, cnt] : drop) {
+    for (const auto& token : tokenizer.Tokenize(str)) {
+      counter[token] += cnt;
+    }
+  }
   return counter;
 }
 

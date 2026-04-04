@@ -115,7 +115,8 @@ public:
     int32_t vocab_size_ = 8000;
     float character_coverage_ = 0.9995f;
     int32_t min_count_ = 32;
-    
+    int32_t cpu_count_ = 4;
+
     int32_t unk_id_ = 0;
     int32_t bos_id_ = 1;
     int32_t eos_id_ = 2;
@@ -143,6 +144,9 @@ public:
 
     int32_t min_count() const { return min_count_; }
     void set_min_count(int32_t count) { min_count_ = count; }
+
+    int32_t cpu_count() const { return cpu_count_; }
+    void set_cpu_count(int32_t count) { cpu_count_ = count; }
     
     int32_t unk_id() const { return unk_id_; }
     int32_t bos_id() const { return bos_id_; }

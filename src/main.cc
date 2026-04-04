@@ -28,6 +28,7 @@ void PrintUsage(const char* prog) {
               << "  --model <prefix>       Model output prefix (default: tokenizer)\n"
               << "  --vocab-size <int>     Vocabulary size (default: 8000)\n"
               << "  --normalize <name>     Normalizer: identity|NMT_NFKC (default: identity)\n"
+              << "  --cpu <int>            Number of threads (default: 4)\n"
               << "\nTokenize/Encode/Decode read from stdin, write to stdout.\n"
               << "Tokenize outputs space-separated pieces per line.\n"
               << "Encode outputs one token per line (piece TAB id).\n"
@@ -37,11 +38,12 @@ void PrintUsage(const char* prog) {
 void RunTrain(const std::string& method,
               const std::vector<std::string>& inputs,
               const std::string& model_prefix, int vocab_size,
-              const std::string& normalizer_name) {
+              const std::string& normalizer_name, int cpu_count) {
     CounterSpec counter_spec;
     for (const auto& f : inputs) counter_spec.add_input(f);
     counter_spec.set_model_prefix(model_prefix);
     counter_spec.set_method(method);
+    counter_spec.set_cpu_count(cpu_count);
 
     NormalizerSpec normalizer_spec;
     normalizer_spec.SetName(normalizer_name);
@@ -270,6 +272,7 @@ int main(int argc, char* argv[]) {
         std::string model_prefix = "tokenizer";
         int vocab_size = 8000;
         std::string normalizer = "identity";
+        int cpu_count = 4;
 
         for (int i = 2; i < argc; i++) {
             if (std::strcmp(argv[i], "--method") == 0 && i + 1 < argc) {
@@ -282,6 +285,8 @@ int main(int argc, char* argv[]) {
                 vocab_size = std::atoi(argv[++i]);
             } else if (std::strcmp(argv[i], "--normalize") == 0 && i + 1 < argc) {
                 normalizer = argv[++i];
+            } else if (std::strcmp(argv[i], "--cpu") == 0 && i + 1 < argc) {
+                cpu_count = std::atoi(argv[++i]);
             } else {
                 std::cerr << "Unknown option: " << argv[i] << "\n";
                 piece::PrintUsage(argv[0]);
@@ -294,7 +299,7 @@ int main(int argc, char* argv[]) {
             return 1;
         }
 
-        piece::RunTrain(method, inputs, model_prefix, vocab_size, normalizer);
+        piece::RunTrain(method, inputs, model_prefix, vocab_size, normalizer, cpu_count);
 
     } else if (command == "tokenize" || command == "encode" || command == "decode") {
         std::string model_file;

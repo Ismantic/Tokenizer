@@ -1,9 +1,7 @@
 #pragma once
-#include <atomic>
 #include <limits>
 #include <map>
 #include <memory>
-#include <mutex>
 #include <string>
 #include <thread>
 #include <unordered_map>
@@ -37,45 +35,6 @@ private:
         }
     }
 
-    template <typename Map, typename CountFn>
-    Map ParallelBatchCount(size_t total, size_t batch_size, CountFn&& count_fn) const {
-        Map merged;
-        if (total == 0) {
-            return merged;
-        }
-
-        const size_t workers = GetCpuCount((total + batch_size - 1) / batch_size);
-        if (workers <= 1) {
-            return count_fn(0, total);
-        }
-
-        std::atomic<size_t> next_begin{0};
-        std::mutex merge_mu;
-        std::vector<std::thread> threads;
-        threads.reserve(workers);
-
-        for (size_t worker = 0; worker < workers; ++worker) {
-            threads.emplace_back([&, worker]() {
-                while (true) {
-                    const size_t begin = next_begin.fetch_add(batch_size);
-                    if (begin >= total) {
-                        break;
-                    }
-                    const size_t end = std::min(total, begin + batch_size);
-                    Map batch_counts = count_fn(begin, end);
-                    std::lock_guard<std::mutex> lock(merge_mu);
-                    MergeCounts(&merged, batch_counts);
-                }
-            });
-        }
-
-        for (auto& thread : threads) {
-            thread.join();
-        }
-
-        return merged;
-    }
-    
     bool InitMetaPieces();
     std::unique_ptr<MultiFileSentenceIterator> MakeIterator() const;
 
