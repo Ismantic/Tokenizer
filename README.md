@@ -77,7 +77,7 @@ tok.method                        # → 'bytepiece'
 
 | 方法 | 训练 | 推理 | 说明 |
 |------|------|------|------|
-| `piece` | PieceCounter | PieceTokenizer | 索引链表优化 BPE |
+| `piece` | PieceCounter | PieceTokenizer | 类似 NanoChat 的 RustBPE 实现 |
 | `sentencepiece` | SentencePieceCounter | SentencePieceTokenizer | Google SentencePiece BPE 实现 |
 | `bytepiece` | BytePieceCounter | BytePieceTokenizer | 科学空间 BytePiece 实现 |
 
