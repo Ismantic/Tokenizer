@@ -198,8 +198,20 @@ bool PieceCounter::LoadSentences() {
 
   LOG(INFO) << "Normalizing sentences ...";
   const Normalizer normalizer(normalizer_spec_);
-  for (auto& [text, freq] : sentences_)
-    text = normalizer.Normalize(text);
+  const int num_threads = counter_spec_.cpu_count();
+  if (num_threads > 1 && sentences_.size() > 256) {
+    std::vector<std::thread> threads;
+    for (int n = 0; n < num_threads; ++n) {
+      threads.emplace_back([&, n]() {
+        for (size_t i = n; i < sentences_.size(); i += num_threads)
+          sentences_[i].first = normalizer.Normalize(sentences_[i].first);
+      });
+    }
+    for (auto& t : threads) t.join();
+  } else {
+    for (auto& [text, freq] : sentences_)
+      text = normalizer.Normalize(text);
+  }
 
   LOG(INFO) << "Done! preprocessed " << sentences_.size() << " sentences.";
   return true;

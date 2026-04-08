@@ -1,13 +1,14 @@
 #include "sentencepiece_counter.h"
 
 #include <memory>
+#include <thread>
 
 #include "common.h"
 #include "normalizer.h"
 
 namespace piece {
 
-SentencePieceCounter::SentencePieceCounter(const CounterSpec &counter_spec, 
+SentencePieceCounter::SentencePieceCounter(const CounterSpec &counter_spec,
                  const NormalizerSpec &normalizer_spec)
     : counter_spec_(counter_spec),
       normalizer_spec_(normalizer_spec) {
@@ -21,17 +22,17 @@ bool SentencePieceCounter::InitMetaPieces() {
         meta_pieces_[counter_spec_.unk_id()] = std::make_pair(
             counter_spec_.unk_piece(), Model::Piece::UNKNOWN);
     }
-    
+
     if (counter_spec_.bos_id() >= 0) {
         meta_pieces_[counter_spec_.bos_id()] = std::make_pair(
             counter_spec_.bos_piece(), Model::Piece::CONTROL);
     }
-    
+
     if (counter_spec_.eos_id() >= 0) {
         meta_pieces_[counter_spec_.eos_id()] = std::make_pair(
             counter_spec_.eos_piece(), Model::Piece::CONTROL);
     }
-    
+
     if (counter_spec_.pad_id() >= 0) {
         meta_pieces_[counter_spec_.pad_id()] = std::make_pair(
             counter_spec_.pad_piece(), Model::Piece::CONTROL);
@@ -64,7 +65,7 @@ void SentencePieceCounter::SplitSentencesByWhitespace() {
         }
     }
     sentences_ = misc::Sorted(tokens);
-    LOG(INFO) << "Done! " << sentences_.size(); 
+    LOG(INFO) << "Done! " << sentences_.size();
 }
 
 bool SentencePieceCounter::LoadSentences() {
@@ -84,11 +85,26 @@ bool SentencePieceCounter::LoadSentences() {
         sentences_.emplace_back(std::make_pair(sentence, 1));
     }
 
+    // Parallel normalization
     LOG(INFO) << "Normalizing sentences ...";
     const Normalizer normalizer(normalizer_spec_);
-    for (size_t i = 0; i < sentences_.size(); ++i) {
-        auto *s = &sentences_[i].first;
-        *s = normalizer.Normalize(*s);
+    const int num_threads = counter_spec_.cpu_count();
+    if (num_threads > 1 && sentences_.size() > 256) {
+        std::vector<std::thread> threads;
+        for (int n = 0; n < num_threads; ++n) {
+            threads.emplace_back([&, n]() {
+                for (size_t i = n; i < sentences_.size();
+                     i += num_threads) {
+                    sentences_[i].first =
+                        normalizer.Normalize(sentences_[i].first);
+                }
+            });
+        }
+        for (auto& t : threads) t.join();
+    } else {
+        for (size_t i = 0; i < sentences_.size(); ++i) {
+            sentences_[i].first = normalizer.Normalize(sentences_[i].first);
+        }
     }
 
     // Count
@@ -96,7 +112,7 @@ bool SentencePieceCounter::LoadSentences() {
     std::unordered_map<uint32_t, int64_t> chars_count;
     for (const auto &w : sentences_) {
         for (const uint32_t c : ustr::UTF8ToUnicodeText(w.first)) {
-            if (!ustr::IsValidCodepoint(c)) continue;    
+            if (!ustr::IsValidCodepoint(c)) continue;
             chars_count[c] += w.second;
             all_chars_count += w.second;
         }
@@ -120,7 +136,7 @@ bool SentencePieceCounter::LoadSentences() {
     if (misc::ContainsKey(required_chars_, UNK)) {
         return false;
     }
-    
+
     // Replaces rare characters (characters not included in required_chars_)
     for (auto &w : sentences_) {
         ustr::UnicodeText uw2;
@@ -152,19 +168,19 @@ SentencePieceCounter::Symbol* SentencePieceCounter::GetCharSymbol(uint32_t c) {
   s->chars.push_back(c);
   s->freq = freq;
   misc::InsertOrDie(&symbols_cache_, s->fp, s);
-  return s;    
+  return s;
 }
 
-SentencePieceCounter::Symbol* SentencePieceCounter::GetPairSymbol(const Symbol* left, 
+SentencePieceCounter::Symbol* SentencePieceCounter::GetPairSymbol(const Symbol* left,
                                                                   const Symbol* right) {
   if (left == nullptr || right == nullptr || left->is_unk || right->is_unk) {
     return nullptr;
   }
 
-  const uint64_t fp = misc::FingerprintCat(left->fp, right->fp);    
+  const uint64_t fp = misc::FingerprintCat(left->fp, right->fp);
   const auto it = symbols_cache_.find(fp);
   if (it != symbols_cache_.end()) {
-    return it->second; 
+    return it->second;
   }
 
   ustr::UnicodeText ut;
@@ -196,7 +212,7 @@ void SentencePieceCounter::ComputeFreq(Symbol *symbol) const {
     }
     for (auto it = symbol->positions.begin(); it != symbol->positions.end();) {
         const Position pos = DecodePos(*it);
-        if (symbol->left != symbols_[pos.sid][pos.left] || 
+        if (symbol->left != symbols_[pos.sid][pos.left] ||
             symbol->right != symbols_[pos.sid][pos.right]) {
                 it = symbol->positions.erase(it);
         } else {
@@ -211,10 +227,27 @@ void SentencePieceCounter::UpdateActiveSymbols() {
     for (auto &it : symbols_cache_) {
         Symbol* symbol = it.second;
         if (symbol->IsBigram()) {
-            ComputeFreq(symbol);
             symbols.push_back(symbol);
         }
     }
+
+    // Parallel ComputeFreq: each symbol is independent
+    const int num_threads = counter_spec_.cpu_count();
+    if (num_threads > 1 && symbols.size() > 256) {
+        std::vector<std::thread> threads;
+        for (int n = 0; n < num_threads; ++n) {
+            threads.emplace_back([&, n]() {
+                for (size_t i = n; i < symbols.size();
+                     i += num_threads) {
+                    ComputeFreq(symbols[i]);
+                }
+            });
+        }
+        for (auto& t : threads) t.join();
+    } else {
+        for (auto* s : symbols) ComputeFreq(s);
+    }
+
   // At least kMinActiveSymbolsSize symbols must be in |active_symbols_|.
   constexpr int kMinActiveSymbolsSize = 1000;
 
@@ -270,6 +303,8 @@ bool SentencePieceCounter::Count() {
 
     SplitSentencesByWhitespace();
 
+    const int num_threads = counter_spec_.cpu_count();
+
     // Initializes symbols_. symbols_[s][i] stores an unary symbol.
     symbols_.resize(sentences_.size());
     for (size_t i = 0; i < sentences_.size(); ++i) {
@@ -285,13 +320,13 @@ bool SentencePieceCounter::Count() {
         }
     }
 
-    const int vocab_size = 
+    const int vocab_size =
         counter_spec_.vocab_size() - meta_pieces_.size() - required_chars_.size();
-    
+
 
     // We may see duplicated pieces that are extracted with different path.
     // In real segmentation phase, we can consider them as one symbol.
-    // e.g., "aaa" => "aa" 
+    // e.g., "aaa" => "aa"
     std::unordered_set<std::string> dup;
 
     // Main loop
@@ -301,13 +336,27 @@ bool SentencePieceCounter::Count() {
             UpdateActiveSymbols();
         }
 
-        // Scanning active symbols, finds the best_symbol with highest freq.
+        // Parallel frequency computation, then serial best-symbol selection.
+        std::vector<Symbol*> active_vec(active_symbols_.begin(),
+                                        active_symbols_.end());
+        if (num_threads > 1 && active_vec.size() > 256) {
+            std::vector<std::thread> threads;
+            for (int n = 0; n < num_threads; ++n) {
+                threads.emplace_back([&, n]() {
+                    for (size_t i = n; i < active_vec.size();
+                         i += num_threads) {
+                        ComputeFreq(active_vec[i]);
+                    }
+                });
+            }
+            for (auto& t : threads) t.join();
+        } else {
+            for (auto* s : active_vec) ComputeFreq(s);
+        }
+
+        // Serial: find best symbol
         Symbol *best_symbol = nullptr;
-        for (auto& it : active_symbols_) {
-            Symbol* symbol = it;
-            ComputeFreq(symbol);
-            // If the frequency is the same, take shorter symbol.
-            // if the length is the same, use lexicographical comparison
+        for (auto* symbol : active_vec) {
             if (best_symbol == nullptr ||
                 (symbol->freq > best_symbol->freq ||
                 (symbol->freq == best_symbol->freq &&
@@ -322,7 +371,7 @@ bool SentencePieceCounter::Count() {
             LOG(WARNING) << "No valid symbol found";
             break;
         }
-        
+
         if (!dup.insert(best_symbol->ToString()).second) {
             // Removes best_symbol so it is not selected again.
             symbols_cache_.erase(best_symbol->fp);
@@ -332,8 +381,8 @@ bool SentencePieceCounter::Count() {
 
         // Stores the best_symbol in the final output.
         pieces_.emplace_back(best_symbol->ToString(),
-                                   -static_cast<float>(pieces_.size()));                            
-        
+                                   -static_cast<float>(pieces_.size()));
+
         if (pieces_.size() % 20 == 0) {
             LOG(INFO) << "Added: freq=" << best_symbol->freq
                 << " size=" << pieces_.size()
@@ -343,32 +392,23 @@ bool SentencePieceCounter::Count() {
                 << " target=" << vocab_size;
         }
 
-        // Add new bigrams which are created after symbol replacement.
-        // We do not need to scan all characters, but scan the neighbors 
-        // in best_symbol.
+        // Serial merge step.
         for (const uint64_t &encoded_pos : best_symbol->positions) {
             const Position pos = DecodePos(encoded_pos);
 
             if (symbols_[pos.sid][pos.left] == nullptr) {
-                // left index might be NULL (set in the previous iteration)
-                // when left_symbol == right_symbol
                 continue;
             }
 
-            // We have three bigrams [prev, left], [left, right], [right, next],
-            // which are affected with this symbol replacement.
             const int prev = GetPrevIndex(pos.sid, pos.left);
             const int next = GetNextIndex(pos.sid, pos.right);
 
-            // Resets the frequencies of bigrams [prev, left] and [right, next].
             ResetFreq(pos.sid, prev, pos.left, best_symbol);
             ResetFreq(pos.sid, pos.right, next, best_symbol);
 
-            // Merges two symbols
             symbols_[pos.sid][pos.left] = best_symbol;
             symbols_[pos.sid][pos.right] = nullptr;
 
-            // Makes new symbol bigrams [prev, left] and [left, next].
             AddNewPair(pos.sid, prev, pos.left);
             AddNewPair(pos.sid, pos.left, next);
         }
@@ -377,13 +417,13 @@ bool SentencePieceCounter::Count() {
         symbols_cache_.erase(best_symbol->fp);
         active_symbols_.erase(best_symbol);
     } // end of main loop
-    
+
     // Adds required_chars_
     for (const auto &w : misc::Sorted(required_chars_)) {
         const Symbol *symbol = GetCharSymbol(w.first);
         pieces_.emplace_back(symbol->ToString(),
                                -static_cast<float>(pieces_.size()));
-    }    
+    }
 
     misc::STLDeleteElements(&allocated_);
 

@@ -1,8 +1,8 @@
-#pragma once 
+#pragma once
 
 #include <algorithm>
 #include <vector>
-#include <string> 
+#include <string>
 #include <map>
 #include <set>
 #include <unordered_set>
@@ -22,7 +22,7 @@ public:
   using Sentence = std::pair<std::string, int64_t>;
   using Sentences = std::vector<Sentence>;
 
-  SentencePieceCounter(const CounterSpec& counter_spec, 
+  SentencePieceCounter(const CounterSpec& counter_spec,
           const NormalizerSpec& normalizer_spec);
   ~SentencePieceCounter();
 
@@ -99,7 +99,7 @@ private:
   void ResetFreq(int sid, int left, int right, const Symbol *best);
   void UpdateActiveSymbols();
 
-  
+
   std::unordered_map<uint64_t, Symbol*> symbols_cache_;
   std::set<Symbol*> active_symbols_;
   std::vector<Symbol*> allocated_;
