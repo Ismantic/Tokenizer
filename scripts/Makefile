@@ -7,7 +7,7 @@ MODEL_DIR := $(CURDIR)/output
 NORMALIZE       := identity
 VOCAB_SIZE      := 80000
 CPU             := 8
-MAX_SENTENCES   := 80000000
+MAX_SENTENCES   := 10000000
 MIN_COUNT       := 2
 
 METHODS := bytepiece sentencepiece piece

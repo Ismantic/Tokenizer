@@ -56,7 +56,7 @@ template <class Collection>
 void InsertOrDie(Collection *const collection,
                  const typename Collection::value_type::first_type &key,
                  const typename Collection::value_type::second_type &data) {
-  assert(InsertIfNotPresent(collection, key, data));
+  InsertIfNotPresent(collection, key, data);
 }
 
 template <typename T>
