@@ -4,10 +4,25 @@
 
 namespace piece {
 
-PieceTokenizer::PieceTokenizer(const Model& model)
-    : model_(&model), normalizer_(model.GetNormalizerSpec()) {
+PieceTokenizer::PieceTokenizer(const Model& model, const std::string& cn_dict)
+    : model_(&model),
+      normalizer_(model.GetNormalizerSpec()),
+      space_(model.GetNormalizerSpec().GetSpace()) {
   const auto& counter_spec = model_->GetCounterSpec();
   unk_id_ = counter_spec.unk_id();
+
+  if (!cn_dict.empty()) {
+    auto dict = LoadCnDict(cn_dict);
+    if (!dict.empty()) {
+      cn_cutter_ = std::make_unique<CnCutter>(dict);
+      cn_cut_fn_ = [cutter = cn_cutter_.get()](std::string_view s) {
+        return cutter->Cut(s);
+      };
+      LOG(INFO) << "PieceTokenizer cn mode enabled";
+    } else {
+      LOG(ERROR) << "cn dict is empty: " << cn_dict;
+    }
+  }
 
   for (size_t i = 0; i < model_->PiecesSize(); ++i) {
     const auto& piece = model_->GetPieces(i);
@@ -40,9 +55,25 @@ PieceTokenizer::~PieceTokenizer() = default;
 
 PieceTokenizer::EncodeResult PieceTokenizer::Encode(std::string_view text) const {
   std::string normalized = normalizer_.Normalize(text);
-  std::vector<int> ids = BuildInitialTokenIds(normalized);
-  GreedyMerge(ids);
-  return TokenIdsToResult(ids);
+  if (!cn_cutter_) {
+    std::vector<int> ids = BuildInitialTokenIds(normalized);
+    GreedyMerge(ids);
+    return TokenIdsToResult(ids);
+  }
+
+  // cn mode: pre-split with SplitTextCn so BPE merging cannot cross
+  // cutter-imposed Han word boundaries (matches training behavior).
+  EncodeResult result;
+  for (const auto& piece :
+       ustr::SplitTextCn(normalized, space_, cn_cut_fn_)) {
+    std::vector<int> ids = BuildInitialTokenIds(piece);
+    GreedyMerge(ids);
+    auto sub = TokenIdsToResult(ids);
+    result.insert(result.end(),
+                  std::make_move_iterator(sub.begin()),
+                  std::make_move_iterator(sub.end()));
+  }
+  return result;
 }
 
 std::vector<std::string> PieceTokenizer::Tokenize(std::string_view text) const {

@@ -34,6 +34,10 @@ void PrintUsage(const char* prog) {
               << "  --min-count <int>      Discard tokens with freq < this (default: 32)\n"
               << "  --cn-dict <file>       Enable CN mode for `piece` method using\n"
               << "                         a TSV (word\\tfreq) Unigram dictionary\n"
+              << "\nTokenize/Encode options:\n"
+              << "  --model <file>         Model file to load\n"
+              << "  --input <file>         Read input from file instead of stdin\n"
+              << "  --cn-dict <file>       Enable CN mode for `piece` model (must match training)\n"
               << "\nTokenize/Encode/Decode read from stdin, write to stdout.\n"
               << "Tokenize outputs space-separated pieces per line.\n"
               << "Encode outputs one token per line (piece TAB id).\n"
@@ -103,7 +107,7 @@ void RunCount(const std::string& method,
     std::cerr << "Model saved to " << model_prefix << ".model\n";
 }
 
-void RunEncode(const std::string& model_file) {
+void RunEncode(const std::string& model_file, const std::string& cn_dict) {
     Model model;
     if (!model.Load(model_file)) {
         std::cerr << "Error: cannot load model: " << model_file << "\n";
@@ -111,6 +115,10 @@ void RunEncode(const std::string& model_file) {
     }
 
     const std::string& method = model.GetCounterSpec().method();
+    if (!cn_dict.empty() && method != "piece") {
+        std::cerr << "Warning: --cn-dict is only supported for --method piece; "
+                  << "ignoring for method=" << method << "\n";
+    }
     std::string line;
     if (method == "naive") {
         NaiveTokenizer tokenizer(model);
@@ -122,7 +130,7 @@ void RunEncode(const std::string& model_file) {
             std::cout << "\n";
         }
     } else if (method == "piece") {
-        PieceTokenizer tokenizer(model);
+        PieceTokenizer tokenizer(model, cn_dict);
         while (std::getline(std::cin, line)) {
             auto tokens = tokenizer.Encode(line);
             for (const auto& t : tokens) {
@@ -153,7 +161,7 @@ void RunEncode(const std::string& model_file) {
     }
 }
 
-void RunTokenize(const std::string& model_file) {
+void RunTokenize(const std::string& model_file, const std::string& cn_dict) {
     Model model;
     if (!model.Load(model_file)) {
         std::cerr << "Error: cannot load model: " << model_file << "\n";
@@ -161,6 +169,10 @@ void RunTokenize(const std::string& model_file) {
     }
 
     const std::string& method = model.GetCounterSpec().method();
+    if (!cn_dict.empty() && method != "piece") {
+        std::cerr << "Warning: --cn-dict is only supported for --method piece; "
+                  << "ignoring for method=" << method << "\n";
+    }
     std::string line;
     if (method == "naive") {
         NaiveTokenizer tokenizer(model);
@@ -173,7 +185,7 @@ void RunTokenize(const std::string& model_file) {
             std::cout << "\n";
         }
     } else if (method == "piece") {
-        PieceTokenizer tokenizer(model);
+        PieceTokenizer tokenizer(model, cn_dict);
         while (std::getline(std::cin, line)) {
             auto tokens = tokenizer.Tokenize(line);
             for (size_t i = 0; i < tokens.size(); ++i) {
@@ -229,7 +241,7 @@ void RunDecode(const std::string& model_file) {
             std::cout << tokenizer.Decode(ids) << "\n";
         }
     } else if (method == "piece") {
-        PieceTokenizer tokenizer(model);
+        PieceTokenizer tokenizer(model, "");
         while (std::getline(std::cin, line)) {
             std::vector<int> ids;
             std::istringstream iss(line);
@@ -323,12 +335,15 @@ int main(int argc, char* argv[]) {
     } else if (command == "tokenize" || command == "encode" || command == "decode") {
         std::string model_file;
         std::string input_file;
+        std::string cn_dict;
 
         for (int i = 2; i < argc; i++) {
             if (std::strcmp(argv[i], "--model") == 0 && i + 1 < argc) {
                 model_file = argv[++i];
             } else if (std::strcmp(argv[i], "--input") == 0 && i + 1 < argc) {
                 input_file = argv[++i];
+            } else if (std::strcmp(argv[i], "--cn-dict") == 0 && i + 1 < argc) {
+                cn_dict = argv[++i];
             }
         }
 
@@ -349,9 +364,9 @@ int main(int argc, char* argv[]) {
         }
 
         if (command == "tokenize") {
-            piece::RunTokenize(model_file);
+            piece::RunTokenize(model_file, cn_dict);
         } else if (command == "encode") {
-            piece::RunEncode(model_file);
+            piece::RunEncode(model_file, cn_dict);
         } else {
             piece::RunDecode(model_file);
         }

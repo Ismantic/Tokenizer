@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -7,6 +8,7 @@
 #include <vector>
 
 #include "common.h"
+#include "cut.h"
 #include "normalizer.h"
 #include "piece_spec.h"
 #include "ustr.h"
@@ -18,7 +20,11 @@ public:
   using EncodeResult = std::vector<std::pair<std::string, int>>;
   using StrToInt = std::unordered_map<std::string_view, int>;
 
-  explicit PieceTokenizer(const Model& model);
+  // When `cn_dict` is non-empty, Encode pre-splits input with
+  // SplitTextCn (matching cn-mode training) so BPE merging never
+  // crosses cutter-imposed Han word boundaries.
+  explicit PieceTokenizer(const Model& model,
+                          const std::string& cn_dict = "");
   ~PieceTokenizer();
 
   EncodeResult Encode(std::string_view text) const;
@@ -44,6 +50,9 @@ private:
   StrToInt pieces_;
   int unk_id_;
   int byte_to_id_[256];
+  std::unique_ptr<CnCutter> cn_cutter_;
+  ustr::CnCutFn cn_cut_fn_;
+  std::string space_;
 };
 
 }  // namespace piece
