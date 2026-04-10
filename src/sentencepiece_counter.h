@@ -53,6 +53,7 @@ private:
     const Symbol *left;              // left symbol in bigram
     const Symbol *right;             // right symbol in bigram
     ustr::UnicodeText chars;  // all flattend chracter sequence
+    size_t byte_size;                // UTF-8 byte length of chars
     bool is_unk;                     // true if this symbol is unknown.
     uint64_t fp;                     // fingerprint of this symbol.
     uint64_t freq;                   // frequency of this symbol.
@@ -62,7 +63,7 @@ private:
 
     bool IsBigram() const { return left != nullptr && right != nullptr; }
     std::string ToString() const;
-    Symbol() : left(nullptr), right(nullptr), is_unk(false), fp(0), freq(0) {}
+    Symbol() : left(nullptr), right(nullptr), byte_size(0), is_unk(false), fp(0), freq(0) {}
   };
 
   struct Position {

@@ -32,6 +32,7 @@ void PrintUsage(const char* prog) {
               << "  --cpu <int>            Number of threads (default: 4)\n"
               << "  --max-sentences <int>  Max input lines to load (default: 0=unlimited)\n"
               << "  --min-count <int>      Discard tokens with freq < this (default: 32)\n"
+              << "  --max-piece-size <int> Max bytes per learned piece (default: 18, ~6 CJK chars)\n"
               << "  --cn-dict <file>       Enable CN mode for `piece` method using\n"
               << "                         a TSV (word\\tfreq) Unigram dictionary\n"
               << "\nTokenize/Encode options:\n"
@@ -48,7 +49,7 @@ void RunCount(const std::string& method,
               const std::vector<std::string>& inputs,
               const std::string& model_prefix, int vocab_size,
               const std::string& normalizer_name, int cpu_count,
-              int max_sentences, int min_count,
+              int max_sentences, int min_count, int max_piece_size,
               const std::string& cn_dict) {
     CounterSpec counter_spec;
     for (const auto& f : inputs) counter_spec.add_input(f);
@@ -57,6 +58,7 @@ void RunCount(const std::string& method,
     counter_spec.set_cpu_count(cpu_count);
     counter_spec.set_max_sentences(max_sentences);
     counter_spec.set_min_count(min_count);
+    counter_spec.set_max_piece_size(max_piece_size);
     counter_spec.set_cn_dict(cn_dict);
 
     if (!cn_dict.empty() && method != "piece") {
@@ -297,6 +299,7 @@ int main(int argc, char* argv[]) {
         int cpu_count = 4;
         int max_sentences = 0;
         int min_count = 32;
+        int max_piece_size = 18;
         std::string cn_dict;
 
         for (int i = 2; i < argc; i++) {
@@ -316,6 +319,8 @@ int main(int argc, char* argv[]) {
                 max_sentences = std::atoi(argv[++i]);
             } else if (std::strcmp(argv[i], "--min-count") == 0 && i + 1 < argc) {
                 min_count = std::atoi(argv[++i]);
+            } else if (std::strcmp(argv[i], "--max-piece-size") == 0 && i + 1 < argc) {
+                max_piece_size = std::atoi(argv[++i]);
             } else if (std::strcmp(argv[i], "--cn-dict") == 0 && i + 1 < argc) {
                 cn_dict = argv[++i];
             } else {
@@ -330,7 +335,7 @@ int main(int argc, char* argv[]) {
             return 1;
         }
 
-        piece::RunCount(method, inputs, model_prefix, vocab_size, normalizer, cpu_count, max_sentences, min_count, cn_dict);
+        piece::RunCount(method, inputs, model_prefix, vocab_size, normalizer, cpu_count, max_sentences, min_count, max_piece_size, cn_dict);
 
     } else if (command == "tokenize" || command == "encode" || command == "decode") {
         std::string model_file;

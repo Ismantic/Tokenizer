@@ -207,6 +207,7 @@ SentencePieceCounter::Symbol* SentencePieceCounter::GetCharSymbol(uint32_t c) {
   s->is_unk = (counter_spec_.GetUnkUnicode() == c);
   s->fp = c;
   s->chars.push_back(c);
+  s->byte_size = c < 0x80 ? 1 : c < 0x800 ? 2 : c < 0x10000 ? 3 : 4;
   s->freq = freq;
   misc::InsertOrDie(&symbols_cache_, s->fp, s);
   return s;
@@ -215,6 +216,13 @@ SentencePieceCounter::Symbol* SentencePieceCounter::GetCharSymbol(uint32_t c) {
 SentencePieceCounter::Symbol* SentencePieceCounter::GetPairSymbol(const Symbol* left,
                                                                   const Symbol* right) {
   if (left == nullptr || right == nullptr || left->is_unk || right->is_unk) {
+    return nullptr;
+  }
+
+  // Enforce max_piece_size (in UTF-8 bytes) to avoid learning huge pieces
+  // from noisy repeated-punctuation lines.
+  if (left->byte_size + right->byte_size >
+      static_cast<size_t>(counter_spec_.max_piece_size())) {
     return nullptr;
   }
 
@@ -234,6 +242,7 @@ SentencePieceCounter::Symbol* SentencePieceCounter::GetPairSymbol(const Symbol* 
   s->left = left;
   s->right = right;
   s->chars = ut;
+  s->byte_size = left->byte_size + right->byte_size;
   misc::InsertOrDie(&symbols_cache_, s->fp, s);
   return s;
 }

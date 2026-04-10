@@ -43,7 +43,9 @@ bool PieceCounter::Count() {
   InitPairsStatsAndIndex(stats, pair_index);
 
   const int num_merges = counter_spec_.vocab_size() - meta_pieces_.size();
-  LOG(INFO) << "Starting BBPE training with " << num_merges << " merges";
+  const size_t max_piece_size = counter_spec_.max_piece_size();
+  LOG(INFO) << "Starting BBPE training with " << num_merges << " merges"
+            << ", max_piece_size=" << max_piece_size;
 
   // Seed byte-level vocabulary (0–255).
   int cnt = 0;
@@ -58,6 +60,14 @@ bool PieceCounter::Count() {
   while (cnt < num_merges && stats) {
     const auto top = stats.Top();
     const int n = stats.GetCount(top);
+    // Skip pairs that would exceed max_piece_size. Remove from stats so
+    // the same pair isn't picked again; pair_index entry becomes stale
+    // and is naturally ignored on next lookup.
+    if (vocab_[top.first].size() + vocab_[top.second].size() > max_piece_size) {
+      stats.Remove(top, n);
+      pair_index.erase(top);
+      continue;
+    }
     const int new_id = vocab_.size();
     vocab_[new_id] = vocab_[top.first] + vocab_[top.second];
     pieces_.emplace_back(

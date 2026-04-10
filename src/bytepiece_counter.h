@@ -51,7 +51,6 @@ private:
     NormalizerSpec normalizer_spec_;
     
     static constexpr size_t max_piece_count_ = 6;
-    static constexpr size_t max_piece_size_ = 18;
     static constexpr float_t INF = std::numeric_limits<float_t>::infinity();
     static const std::vector<std::vector<float_t>> T_;
     std::vector<std::unordered_map<std::string, float_t>> N_;

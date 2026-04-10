@@ -117,6 +117,7 @@ public:
     int32_t min_count_ = 32;
     int32_t cpu_count_ = 4;
     int32_t max_sentences_ = 0;  // 0 = unlimited
+    int32_t max_piece_size_ = 18;  // max bytes per piece (~6 CJK chars)
 
     // Path to a TSV (`word\tfreq`) Chinese-segmenter dictionary. When
     // non-empty, PieceCounter enters cn mode and runs Han runs through
@@ -157,6 +158,9 @@ public:
     int32_t max_sentences() const { return max_sentences_; }
     void set_max_sentences(int32_t n) { max_sentences_ = n; }
 
+    int32_t max_piece_size() const { return max_piece_size_; }
+    void set_max_piece_size(int32_t n) { max_piece_size_ = n; }
+
     const std::string& cn_dict() const { return cn_dict_; }
     void set_cn_dict(const std::string& path) { cn_dict_ = path; }
     
@@ -186,6 +190,7 @@ public:
         oss << "vocab_size=" << vocab_size_ << "\n";
         oss << "character_coverage=" << character_coverage_ << "\n";
         oss << "min_count=" << min_count_ << "\n";
+        oss << "max_piece_size=" << max_piece_size_ << "\n";
 
         oss << "unk_id=" << unk_id_ << "\n";
         oss << "bos_id=" << bos_id_ << "\n";
@@ -222,6 +227,8 @@ public:
                 character_coverage_ = std::stof(value);
             } else if (key == "min_count") {
                 min_count_ = std::stoi(value);
+            } else if (key == "max_piece_size") {
+                max_piece_size_ = std::stoi(value);
             } else if (key == "unk_unicode") {
                 unk_unicode_ = std::stoul(value);
             } else if (key == "unk_id") {
