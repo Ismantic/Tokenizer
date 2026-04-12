@@ -143,11 +143,31 @@ TEST(UstrTest, SplitTextCJKWordRun) {
 }
 
 TEST(UstrTest, SplitTextCJKPunctBreaksRun) {
-    // "你好，世界" -> ["你好", "，世界"] (，U+FF0C is a word-prefix punct)
+    // "你好，世界" -> ["你好", "，", "世界"]
+    // Punct is NOT absorbed into Han word runs.
     auto r = SplitText("你好，世界", kSp);
-    ASSERT_EQ(static_cast<size_t>(2), r.size());
+    ASSERT_EQ(static_cast<size_t>(3), r.size());
     EXPECT_EQ(std::string("你好"), std::string(r[0]));
-    EXPECT_EQ(std::string("，世界"), std::string(r[1]));
+    EXPECT_EQ(std::string("，"), std::string(r[1]));
+    EXPECT_EQ(std::string("世界"), std::string(r[2]));
+}
+
+TEST(UstrTest, SplitTextHanSpacePeeled) {
+    // "▁你好" -> ["▁", "你好"] (space peeled before Han)
+    std::string input = std::string(kSp) + "你好";
+    auto r = SplitText(input, kSp);
+    ASSERT_EQ(static_cast<size_t>(2), r.size());
+    EXPECT_EQ(std::string(kSp), std::string(r[0]));
+    EXPECT_EQ(std::string("你好"), std::string(r[1]));
+}
+
+TEST(UstrTest, SplitTextHanNonHanBoundary) {
+    // "hello你好world" -> ["hello", "你好", "world"]
+    auto r = SplitText("hello你好world", kSp);
+    ASSERT_EQ(static_cast<size_t>(3), r.size());
+    EXPECT_EQ(std::string("hello"), std::string(r[0]));
+    EXPECT_EQ(std::string("你好"), std::string(r[1]));
+    EXPECT_EQ(std::string("world"), std::string(r[2]));
 }
 
 TEST(UstrTest, SplitTextEmojiIsPunct) {

@@ -312,13 +312,33 @@ std::vector<std::string_view> SplitText(std::string_view text,
         }
 
         if (kind == kWord) {
-            const char* run_start =
-                pending_space != nullptr ? pending_space : begin;
-            pending_space = nullptr;
+            // Determine Han-ness of first word char for boundary splitting.
+            size_t mb = 0;
+            const uint32_t first_cp = DecodeUTF8(begin, end, &mb);
+            const bool first_han = IsHan(first_cp);
+
+            const char* run_start;
+            if (pending_space != nullptr) {
+                if (first_han) {
+                    // Han words never carry a space prefix — emit standalone.
+                    result.emplace_back(pending_space, pending_space_len);
+                    run_start = begin;
+                } else {
+                    run_start = pending_space;
+                }
+                pending_space = nullptr;
+            } else {
+                run_start = begin;
+            }
+
+            // Consume word chars with the same Han-ness.
             const char* run_end = begin;
             while (run_end < end) {
                 const int wlen = char_len(run_end);
                 if (classify(run_end, wlen) != kWord) break;
+                size_t mb2 = 0;
+                const uint32_t cp = DecodeUTF8(run_end, end, &mb2);
+                if (IsHan(cp) != first_han) break;
                 run_end += wlen;
             }
             result.emplace_back(run_start, run_end - run_start);
@@ -328,21 +348,29 @@ std::vector<std::string_view> SplitText(std::string_view text,
 
         // kind == kPunct
         // Special case: when there's no pending space and the very next
-        // character is a word char, the punct is absorbed as a 1-char
-        // prefix of the upcoming word run (rustbpe alt 2 behavior).
+        // character is a non-Han word char, the punct is absorbed as a
+        // 1-char prefix of the upcoming word run (rustbpe alt 2 behavior).
+        // Han word runs never absorb a preceding punct.
         if (pending_space == nullptr && begin + clen < end) {
             const int nlen = char_len(begin + clen);
             if (classify(begin + clen, nlen) == kWord) {
-                const char* run_start = begin;
-                const char* run_end = begin + clen;
-                while (run_end < end) {
-                    const int wlen = char_len(run_end);
-                    if (classify(run_end, wlen) != kWord) break;
-                    run_end += wlen;
+                size_t mb = 0;
+                const uint32_t wcp = DecodeUTF8(begin + clen, end, &mb);
+                if (!IsHan(wcp)) {
+                    const char* run_start = begin;
+                    const char* run_end = begin + clen;
+                    while (run_end < end) {
+                        const int wlen = char_len(run_end);
+                        if (classify(run_end, wlen) != kWord) break;
+                        size_t mb2 = 0;
+                        const uint32_t cp = DecodeUTF8(run_end, end, &mb2);
+                        if (IsHan(cp)) break;
+                        run_end += wlen;
+                    }
+                    result.emplace_back(run_start, run_end - run_start);
+                    begin = run_end;
+                    continue;
                 }
-                result.emplace_back(run_start, run_end - run_start);
-                begin = run_end;
-                continue;
             }
         }
 
@@ -374,64 +402,19 @@ std::vector<std::string> SplitTextCn(std::string_view text,
     std::vector<std::string> result;
     const auto pieces = SplitText(text, space);
 
+    // SplitText already splits at Han / non-Han boundaries and peels
+    // space prefixes from Han runs. Each piece is either entirely Han
+    // or contains no Han at all. Just pass Han pieces through cn_cut.
     for (const auto piece : pieces) {
         if (piece.empty()) continue;
 
-        const char* p = piece.data();
-        const char* const end = p + piece.size();
-
-        // Detect & peel a leading space sentinel.
-        const bool has_space = piece.size() >= space.size() &&
-                               std::string_view(p, space.size()) == space;
-        if (has_space) p += space.size();
-
-        // Piece was just the space sentinel (e.g. emitted by SplitText
-        // for a run of consecutive spaces).
-        if (p == end) {
-            result.emplace_back(space);
-            continue;
-        }
-
-        auto is_han_at = [&](const char* q) -> bool {
-            if (q >= end) return false;
-            size_t mblen = 0;
-            const uint32_t cp = DecodeUTF8(q, end, &mblen);
-            return IsHan(cp);
-        };
-
-        // If the leading space would attach to a Han char, emit it
-        // standalone instead — Han words don't carry space prefixes.
-        bool space_attached = !has_space;
-        if (has_space && is_han_at(p)) {
-            result.emplace_back(space);
-            space_attached = true;
-        }
-
-        // Walk the remainder, splitting at Han / non-Han boundaries.
-        while (p < end) {
-            const bool han = is_han_at(p);
-            const char* run_start = p;
-            while (p < end) {
-                size_t mblen = 0;
-                const uint32_t cp = DecodeUTF8(p, end, &mblen);
-                if (mblen == 0) { ++p; continue; }
-                if (IsHan(cp) != han) break;
-                p += mblen;
-            }
-            const std::string_view run(run_start, p - run_start);
-
-            if (han) {
-                for (auto& w : cn_cut(run)) result.emplace_back(std::move(w));
-            } else if (!space_attached) {
-                std::string s;
-                s.reserve(space.size() + run.size());
-                s.append(space.data(), space.size());
-                s.append(run.data(), run.size());
-                result.emplace_back(std::move(s));
-                space_attached = true;
-            } else {
-                result.emplace_back(run);
-            }
+        size_t mb = 0;
+        const uint32_t cp = DecodeUTF8(piece.data(),
+                                       piece.data() + piece.size(), &mb);
+        if (IsHan(cp)) {
+            for (auto& w : cn_cut(piece)) result.emplace_back(std::move(w));
+        } else {
+            result.emplace_back(piece);
         }
     }
 
