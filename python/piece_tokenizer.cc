@@ -6,6 +6,7 @@
 
 #include "piece_spec.h"
 #include "normalizer.h"
+#include "tokenizer.h"
 #include "naive_counter.h"
 #include "naive_tokenizer.h"
 #include "piece_counter.h"
@@ -16,9 +17,9 @@
 namespace py = pybind11;
 using namespace piece;
 
-class Tokenizer {
+class PyTokenizer {
 public:
-    Tokenizer() = default;
+    PyTokenizer() = default;
 
     bool Load(const std::string& model_file) {
         if (!model_.Load(model_file)) {
@@ -129,27 +130,51 @@ private:
     std::unique_ptr<BytePieceTokenizer> bp_tok_;
 };
 
+class PreTokenizer {
+public:
+    PreTokenizer(const std::string& normalize = "no", int cut = 0) {
+        spec_.SetName(normalize);
+        spec_.SetCut(cut);
+        tokenizer_ = std::make_unique<piece::Tokenizer>(spec_);
+    }
+
+    std::vector<std::string> tokenize(const std::string& text) const {
+        return tokenizer_->Tokenize(text);
+    }
+
+private:
+    NormalizerSpec spec_;
+    std::unique_ptr<piece::Tokenizer> tokenizer_;
+};
+
 PYBIND11_MODULE(piece_tokenizer, m) {
     m.doc() = "PieceTokenizer Python bindings";
 
-    py::class_<Tokenizer>(m, "Tokenizer")
+    py::class_<PreTokenizer>(m, "PreTokenizer")
+        .def(py::init<const std::string&, int>(),
+             py::arg("normalize") = "no", py::arg("cut") = 0,
+             "Create a pre-tokenizer (normalize + split)")
+        .def("tokenize", &PreTokenizer::tokenize, py::arg("text"),
+             "Pre-tokenize text into tokens");
+
+    py::class_<PyTokenizer>(m, "Tokenizer")
         .def(py::init<>())
-        .def("load", &Tokenizer::Load, py::arg("model_file"),
+        .def("load", &PyTokenizer::Load, py::arg("model_file"),
              "Load a trained model file")
-        .def("encode", &Tokenizer::Encode, py::arg("text"),
+        .def("encode", &PyTokenizer::Encode, py::arg("text"),
              "Encode text into (piece, id) pairs")
-        .def("encode_as_ids", &Tokenizer::EncodeAsIds, py::arg("text"),
+        .def("encode_as_ids", &PyTokenizer::EncodeAsIds, py::arg("text"),
              "Encode text into token ids")
-        .def("encode_as_pieces", &Tokenizer::EncodeAsPieces, py::arg("text"),
+        .def("encode_as_pieces", &PyTokenizer::EncodeAsPieces, py::arg("text"),
              "Encode text into piece strings")
-        .def("decode", &Tokenizer::Decode, py::arg("ids"),
+        .def("decode", &PyTokenizer::Decode, py::arg("ids"),
              "Decode token ids back to text")
-        .def("piece_to_id", &Tokenizer::PieceToId, py::arg("piece"),
+        .def("piece_to_id", &PyTokenizer::PieceToId, py::arg("piece"),
              "Convert a piece string to its id")
-        .def("id_to_piece", &Tokenizer::IdToPiece, py::arg("id"),
+        .def("id_to_piece", &PyTokenizer::IdToPiece, py::arg("id"),
              "Convert an id to its piece string")
-        .def("vocab_size", &Tokenizer::VocabSize,
+        .def("vocab_size", &PyTokenizer::VocabSize,
              "Get vocabulary size")
-        .def_property_readonly("method", &Tokenizer::Method,
+        .def_property_readonly("method", &PyTokenizer::Method,
              "Get the tokenization method");
 }

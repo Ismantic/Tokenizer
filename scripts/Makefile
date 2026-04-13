@@ -11,6 +11,7 @@ CPU             := 8
 MAX_SENTENCES   := 0
 MIN_COUNT       := 0
 CUT             := 1
+MAX_PIECE_SIZE  := 0
 #CN_DICT         := dict.txt
 CN_DICT         :=
 
@@ -43,7 +44,16 @@ $(foreach m,$(METHODS),$(eval $(call METHOD_RULE,$(m))))
 $(MODEL_DIR):
 	mkdir -p $(MODEL_DIR)
 
+MAX_PIECE_SIZE_FLAG := $(if $(filter-out 0,$(MAX_PIECE_SIZE)),--max-piece-size $(MAX_PIECE_SIZE))
+
+raw_count: $(MODEL_DIR)/raw_count.txt
+$(MODEL_DIR)/raw_count.txt: $(wildcard $(EN_INPUT)) $(wildcard $(CN_INPUT)) | $(MODEL_DIR)
+	$(BIN) raw-count $(CN_INPUT_FLAG) $(EN_INPUT_FLAG) \
+		--normalize $(NORMALIZE) --cut $(CUT) \
+		$(MAX_PIECE_SIZE_FLAG) \
+		--output $@
+
 clean:
 	rm -rf $(MODEL_DIR)
 
-.PHONY: all clean $(METHODS)
+.PHONY: all clean $(METHODS) raw_count

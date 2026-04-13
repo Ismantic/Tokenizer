@@ -22,6 +22,7 @@ void PrintUsage(const char* prog) {
     std::cerr << "Usage:\n"
               << "  " << prog << " count [options]\n"
               << "  " << prog << " pretokenize [options]\n"
+              << "  " << prog << " raw-count [options]\n"
               << "  " << prog << " tokenize --model <file>\n"
               << "  " << prog << " encode --model <file>\n"
               << "  " << prog << " decode --model <file>\n"
@@ -38,10 +39,12 @@ void PrintUsage(const char* prog) {
               << "  --max-piece-size <int> Max bytes per learned piece (default: 18, ~6 CJK chars)\n"
               << "  --cn-dict <file>       Enable CN mode for `piece` method using\n"
               << "                         a TSV (word\\tfreq) Unigram dictionary\n"
-              << "\nPretokenize options:\n"
+              << "\nPretokenize/Raw-count options:\n"
               << "  --normalize <name>     Normalizer: no|NMT_NFKC|NFKC_CF (default: no)\n"
               << "  --cut <0|1>            0=default, 1=split spaces/punct independently\n"
-              << "  --input <file>         Read input from file instead of stdin\n"
+              << "  --input <file>         Input file (repeatable for raw-count)\n"
+              << "  --output <file>        Output file (raw-count only, default: stdout)\n"
+              << "  --max-piece-size <int> Skip tokens exceeding this many bytes (raw-count, default: 0=unlimited)\n"
               << "\nTokenize/Encode options:\n"
               << "  --model <file>         Model file to load\n"
               << "  --input <file>         Read input from file instead of stdin\n"
@@ -391,6 +394,93 @@ int main(int argc, char* argv[]) {
             }
             std::cout << '\n';
         }
+
+    } else if (command == "raw-count") {
+        std::string normalizer = "no";
+        int cut = 0;
+        int max_piece_size = 0;
+        std::vector<std::string> inputs;
+        std::string output_file;
+
+        for (int i = 2; i < argc; i++) {
+            if (std::strcmp(argv[i], "--normalize") == 0 && i + 1 < argc) {
+                normalizer = argv[++i];
+            } else if (std::strcmp(argv[i], "--cut") == 0 && i + 1 < argc) {
+                cut = std::atoi(argv[++i]);
+            } else if (std::strcmp(argv[i], "--input") == 0 && i + 1 < argc) {
+                inputs.push_back(argv[++i]);
+            } else if (std::strcmp(argv[i], "--output") == 0 && i + 1 < argc) {
+                output_file = argv[++i];
+            } else if (std::strcmp(argv[i], "--max-piece-size") == 0 && i + 1 < argc) {
+                max_piece_size = std::atoi(argv[++i]);
+            } else {
+                std::cerr << "Unknown option: " << argv[i] << "\n";
+                piece::PrintUsage(argv[0]);
+                return 1;
+            }
+        }
+
+        piece::NormalizerSpec spec;
+        spec.SetName(normalizer);
+        spec.SetCut(cut);
+        piece::Tokenizer tokenizer(spec);
+
+        std::unordered_map<std::string, int64_t> counts;
+        int64_t line_count = 0;
+
+        auto process_stream = [&](std::istream& in) {
+            std::string line;
+            while (std::getline(in, line)) {
+                for (const auto& token : tokenizer.Tokenize(line)) {
+                    if (max_piece_size > 0 &&
+                        static_cast<int>(token.size()) > max_piece_size)
+                        continue;
+                    counts[token] += 1;
+                }
+                if (++line_count % 5000000 == 0)
+                    std::cerr << "  " << line_count << " lines, "
+                              << counts.size() << " unique tokens\n";
+            }
+        };
+
+        if (inputs.empty()) {
+            process_stream(std::cin);
+        } else {
+            for (const auto& f : inputs) {
+                std::cerr << "Reading: " << f << "\n";
+                std::ifstream fin(f);
+                if (!fin) {
+                    std::cerr << "Error: cannot open " << f << "\n";
+                    return 1;
+                }
+                process_stream(fin);
+            }
+        }
+
+        // Sort by frequency descending.
+        std::vector<std::pair<std::string, int64_t>> sorted(
+            counts.begin(), counts.end());
+        counts.clear();
+        std::sort(sorted.begin(), sorted.end(),
+                  [](const auto& a, const auto& b) {
+                    return a.second > b.second;
+                  });
+
+        std::ofstream fout;
+        if (!output_file.empty()) {
+            fout.open(output_file);
+            if (!fout) {
+                std::cerr << "Error: cannot open output file: " << output_file << "\n";
+                return 1;
+            }
+        }
+        std::ostream& out = output_file.empty() ? std::cout : fout;
+
+        for (const auto& [token, freq] : sorted)
+            out << token << '\t' << freq << '\n';
+
+        std::cerr << "Done! " << line_count << " lines, "
+                  << sorted.size() << " unique tokens\n";
 
     } else if (command == "tokenize" || command == "encode" || command == "decode") {
         std::string model_file;
