@@ -14,12 +14,14 @@
 #include "bytepiece_counter.h"
 #include "bytepiece_tokenizer.h"
 #include "normalizer.h"
+#include "tokenizer.h"
 
 namespace piece {
 
 void PrintUsage(const char* prog) {
     std::cerr << "Usage:\n"
               << "  " << prog << " count [options]\n"
+              << "  " << prog << " pretokenize [options]\n"
               << "  " << prog << " tokenize --model <file>\n"
               << "  " << prog << " encode --model <file>\n"
               << "  " << prog << " decode --model <file>\n"
@@ -36,6 +38,10 @@ void PrintUsage(const char* prog) {
               << "  --max-piece-size <int> Max bytes per learned piece (default: 18, ~6 CJK chars)\n"
               << "  --cn-dict <file>       Enable CN mode for `piece` method using\n"
               << "                         a TSV (word\\tfreq) Unigram dictionary\n"
+              << "\nPretokenize options:\n"
+              << "  --normalize <name>     Normalizer: no|NMT_NFKC|NFKC_CF (default: no)\n"
+              << "  --cut <0|1>            0=default, 1=split spaces/punct independently\n"
+              << "  --input <file>         Read input from file instead of stdin\n"
               << "\nTokenize/Encode options:\n"
               << "  --model <file>         Model file to load\n"
               << "  --input <file>         Read input from file instead of stdin\n"
@@ -341,6 +347,50 @@ int main(int argc, char* argv[]) {
         }
 
         piece::RunCount(method, inputs, model_prefix, vocab_size, normalizer, cpu_count, max_sentences, min_count, max_piece_size, cn_dict, cut);
+
+    } else if (command == "pretokenize") {
+        std::string normalizer = "no";
+        int cut = 0;
+        std::string input_file;
+
+        for (int i = 2; i < argc; i++) {
+            if (std::strcmp(argv[i], "--normalize") == 0 && i + 1 < argc) {
+                normalizer = argv[++i];
+            } else if (std::strcmp(argv[i], "--cut") == 0 && i + 1 < argc) {
+                cut = std::atoi(argv[++i]);
+            } else if (std::strcmp(argv[i], "--input") == 0 && i + 1 < argc) {
+                input_file = argv[++i];
+            } else {
+                std::cerr << "Unknown option: " << argv[i] << "\n";
+                piece::PrintUsage(argv[0]);
+                return 1;
+            }
+        }
+
+        std::ifstream file_in;
+        if (!input_file.empty()) {
+            file_in.open(input_file);
+            if (!file_in) {
+                std::cerr << "Error: cannot open input file: " << input_file << "\n";
+                return 1;
+            }
+            std::cin.rdbuf(file_in.rdbuf());
+        }
+
+        piece::NormalizerSpec spec;
+        spec.SetName(normalizer);
+        spec.SetCut(cut);
+        piece::Tokenizer tokenizer(spec);
+
+        std::string line;
+        while (std::getline(std::cin, line)) {
+            auto tokens = tokenizer.Tokenize(line);
+            for (size_t i = 0; i < tokens.size(); ++i) {
+                if (i > 0) std::cout << ' ';
+                std::cout << tokens[i];
+            }
+            std::cout << '\n';
+        }
 
     } else if (command == "tokenize" || command == "encode" || command == "decode") {
         std::string model_file;
