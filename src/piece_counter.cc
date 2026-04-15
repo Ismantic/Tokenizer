@@ -174,10 +174,24 @@ bool PieceCounter::LoadSentences() {
   const int num_threads = counter_spec_.cpu_count();
   constexpr size_t kBatchSize = 1000000;
 
-  // Optional cn-mode Unigram cutter for Han runs.
+  // Optional cn-mode cutter for Han runs.
   std::unique_ptr<CnCutter> cn_cutter;
   ustr::CnCutFn cn_cut_fn;
-  if (!counter_spec_.cn_dict().empty()) {
+  if (counter_spec_.cn_dict() == "no") {
+    // Per-character mode: split each Han character individually.
+    cn_cut_fn = [](std::string_view s) {
+      std::vector<std::string> out;
+      const char* p = s.data();
+      const char* end = p + s.size();
+      while (p < end) {
+        const int n = std::min<int>(ustr::OneUTF8Size(p), end - p);
+        out.emplace_back(p, n);
+        p += n;
+      }
+      return out;
+    };
+    LOG(INFO) << "cn mode enabled (per-character)";
+  } else if (!counter_spec_.cn_dict().empty()) {
     auto dict = LoadCnDict(counter_spec_.cn_dict());
     if (dict.empty()) {
       LOG(ERROR) << "cn dict is empty: " << counter_spec_.cn_dict();
@@ -187,7 +201,7 @@ bool PieceCounter::LoadSentences() {
     cn_cut_fn = [cutter = cn_cutter.get()](std::string_view s) {
       return cutter->Cut(s);
     };
-    LOG(INFO) << "cn mode enabled";
+    LOG(INFO) << "cn mode enabled (dict)";
   }
 
   LOG(INFO) << "Loading and tokenizing sentences ...";

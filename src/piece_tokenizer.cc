@@ -12,14 +12,28 @@ PieceTokenizer::PieceTokenizer(const Model& model, const std::string& cn_dict)
   const auto& counter_spec = model_->GetCounterSpec();
   unk_id_ = counter_spec.unk_id();
 
-  if (!cn_dict.empty()) {
+  if (cn_dict == "no") {
+    // Per-character mode: split each Han character individually.
+    cn_cut_fn_ = [](std::string_view s) {
+      std::vector<std::string> out;
+      const char* p = s.data();
+      const char* end = p + s.size();
+      while (p < end) {
+        const int n = std::min<int>(ustr::OneUTF8Size(p), end - p);
+        out.emplace_back(p, n);
+        p += n;
+      }
+      return out;
+    };
+    LOG(INFO) << "PieceTokenizer cn mode enabled (per-character)";
+  } else if (!cn_dict.empty()) {
     auto dict = LoadCnDict(cn_dict);
     if (!dict.empty()) {
       cn_cutter_ = std::make_unique<CnCutter>(dict);
       cn_cut_fn_ = [cutter = cn_cutter_.get()](std::string_view s) {
         return cutter->Cut(s);
       };
-      LOG(INFO) << "PieceTokenizer cn mode enabled";
+      LOG(INFO) << "PieceTokenizer cn mode enabled (dict)";
     } else {
       LOG(ERROR) << "cn dict is empty: " << cn_dict;
     }
@@ -56,7 +70,7 @@ PieceTokenizer::~PieceTokenizer() = default;
 
 PieceTokenizer::EncodeResult PieceTokenizer::Encode(std::string_view text) const {
   std::string normalized = normalizer_.Normalize(text);
-  if (!cn_cutter_) {
+  if (!cn_cut_fn_) {
     std::vector<int> ids = BuildInitialTokenIds(normalized);
     GreedyMerge(ids);
     return TokenIdsToResult(ids);
