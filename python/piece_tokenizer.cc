@@ -132,9 +132,10 @@ private:
 
 class PreTokenizer {
 public:
-    PreTokenizer(const std::string& normalize = "no", int cut = 0) {
+    PreTokenizer(const std::string& normalize = "no", int cut = 0, bool reconstruct = false) {
         spec_.SetName(normalize);
         spec_.SetCut(cut);
+        spec_.SetReconstruct(reconstruct);
         tokenizer_ = std::make_unique<piece::Tokenizer>(spec_);
     }
 
@@ -151,8 +152,8 @@ PYBIND11_MODULE(piece_tokenizer, m) {
     m.doc() = "PieceTokenizer Python bindings";
 
     py::class_<PreTokenizer>(m, "PreTokenizer")
-        .def(py::init<const std::string&, int>(),
-             py::arg("normalize") = "no", py::arg("cut") = 0,
+        .def(py::init<const std::string&, int, bool>(),
+             py::arg("normalize") = "no", py::arg("cut") = 0, py::arg("reconstruct") = false,
              "Create a pre-tokenizer (normalize + split)")
         .def("tokenize", &PreTokenizer::tokenize, py::arg("text"),
              "Pre-tokenize text into tokens");

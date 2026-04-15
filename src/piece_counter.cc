@@ -217,7 +217,7 @@ bool PieceCounter::LoadSentences() {
   auto split_one = [&](const std::string& line,
                        std::unordered_map<std::string, int64_t>& sink) {
     const std::string normalized = normalizer.Normalize(line);
-    if (cn_cutter) {
+    if (cn_cut_fn) {
       for (auto& w : ustr::SplitTextCn(normalized, space, cn_cut_fn, cut))
         sink[std::move(w)] += 1;
     } else {

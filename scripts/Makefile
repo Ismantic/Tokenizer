@@ -6,7 +6,7 @@ EN_INPUT := $(ROOT)/data/en_sentences.txt
 MODEL_DIR := $(CURDIR)/output
 
 NORMALIZE       := no
-VOCAB_SIZE      := 16000
+VOCAB_SIZE      := 240000
 CPU             := 8
 MAX_SENTENCES   := 0
 MIN_COUNT       := 0
