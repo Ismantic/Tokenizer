@@ -250,28 +250,34 @@ bool Normalizer::Normalize(std::string_view input,
     
     int consume = 0;
     std::pair<std::string_view,int> p;
-    while (!input.empty()) {
-        p = ProcessTrie(input);
-        if (p.first == " ") {
-            input.remove_prefix(p.second);
-            consume += p.second;
-        } else {
-            break;
+    const bool reconstruct = spec_->GetReconstruct();
+
+    // Skip leading spaces (unless reconstruct mode).
+    if (!reconstruct) {
+        while (!input.empty()) {
+            p = ProcessTrie(input);
+            if (p.first == " ") {
+                input.remove_prefix(p.second);
+                consume += p.second;
+            } else {
+                break;
+            }
         }
+        if (input.empty()) return true;
     }
-    if (input.empty()) return true;
 
     const size_t reserve_size = input.size() * 3;
     output->reserve(reserve_size);
     n2o->reserve(reserve_size);
 
     const std::string_view space = spec_->GetSpace();
-    bool is_prev_space = true;
+    bool is_prev_space = !reconstruct;  // reconstruct: don't treat start as "after space"
     while (!input.empty()) {
         p = ProcessTrie(input);
         std::string_view sp = p.first;
 
-        while (is_prev_space && sp.size() > 0 && sp[0] == ' ') {
+        // Skip consecutive spaces (unless reconstruct mode).
+        while (!reconstruct && is_prev_space && sp.size() > 0 && sp[0] == ' ') {
             sp.remove_prefix(1);
         }
           
@@ -296,12 +302,15 @@ bool Normalizer::Normalize(std::string_view input,
         input.remove_prefix(p.second);
     }
 
-    while (output->size() >= space.size() && 
-           output->substr(output->size() - space.size()) == space) {
-      const int length = output->size() - space.size();
-      consume = (*n2o)[length];
-      output->resize(length);
-      n2o->resize(length);
+    // Strip trailing spaces (unless reconstruct mode).
+    if (!reconstruct) {
+        while (output->size() >= space.size() &&
+               output->substr(output->size() - space.size()) == space) {
+          const int length = output->size() - space.size();
+          consume = (*n2o)[length];
+          output->resize(length);
+          n2o->resize(length);
+        }
     }
 
     n2o->push_back(consume);

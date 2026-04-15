@@ -9,100 +9,60 @@
 #include "ustr.h"
 
 namespace piece {
-inline std::string EscapeSimple(const std::string& str) {
+// Escape: unsafe bytes (\t \n \r \) always use \xHH format.
+// Valid UTF-8 multi-byte sequences pass through as-is.
+// Invalid UTF-8 single bytes also use \xHH.
+inline std::string Escape(const std::string& str) {
+    if (str.empty()) return "";
     std::string result;
-    for (char c : str) {
-        if (c == '\n') result += "\\n";
-        else if (c == '\t') result += "\\t";
-        else if (c == '\r') result += "\\r";
-        else if (c == '\\') result += "\\\\";
-        else result += c;
+    result.reserve(str.size() * 2);
+    const char* p = str.data();
+    const char* end = p + str.size();
+    while (p < end) {
+        unsigned char c = *p;
+        // Unsafe single bytes: must escape to avoid breaking TSV format.
+        if (c == '\t' || c == '\n' || c == '\r' || c == '\\') {
+            char buf[5];
+            snprintf(buf, sizeof(buf), "\\x%02X", c);
+            result += buf;
+            ++p;
+        } else if (c < 0x80) {
+            // Safe ASCII: pass through.
+            result += c;
+            ++p;
+        } else {
+            // Multi-byte: check if valid UTF-8 sequence.
+            size_t len = ustr::OneUTF8Size(p);
+            if (p + len <= end && ustr::IsStructurallyValid(std::string_view(p, len))) {
+                result.append(p, len);
+                p += len;
+            } else {
+                // Invalid byte: hex escape.
+                char buf[5];
+                snprintf(buf, sizeof(buf), "\\x%02X", c);
+                result += buf;
+                ++p;
+            }
+        }
     }
     return result;
 }
 
-inline std::string UnescapeSimple(const std::string& str) {
+// Unescape: handles \xHH sequences, everything else is literal.
+inline std::string Unescape(const std::string& str) {
+    if (str.empty()) return "";
     std::string result;
+    result.reserve(str.size());
     for (size_t i = 0; i < str.size(); ++i) {
-        if (str[i] == '\\' && i + 1 < str.size()) {
-            if (str[i + 1] == 'n') result += '\n';
-            else if (str[i + 1] == 't') result += '\t';
-            else if (str[i + 1] == 'r') result += '\r';
-            else if (str[i + 1] == '\\') result += '\\';
-            else result += str[i + 1];
-            ++i;
+        if (str[i] == '\\' && i + 3 < str.size() && str[i + 1] == 'x') {
+            std::string hex = str.substr(i + 2, 2);
+            result += static_cast<char>(strtol(hex.c_str(), nullptr, 16));
+            i += 3;
         } else {
             result += str[i];
         }
     }
     return result;
-}
-
-inline std::string Escape(const std::string& str) {
-    // 处理空字符串
-    if (str.empty()) {
-        return "";
-    }
-
-    // 首先检查是否为合法的UTF-8字符串
-    if (ustr::IsStructurallyValid(str)) {
-        // 如果是合法UTF-8，使用简单转义
-        return EscapeSimple(str);
-    } else {
-        // 如果不是合法UTF-8，所有字符都使用十六进制表示
-        std::string result;
-        result.reserve(str.size() * 4); // 每个字符最多需要4个字符表示(\xHH)
-        for (unsigned char c : str) {
-            char buf[5];
-            snprintf(buf, sizeof(buf), "\\x%02X", c);
-            result += buf;
-        }
-        return result;
-    }
-}
-
-inline std::string Unescape(const std::string& str) {
-    // 处理空字符串
-    if (str.empty()) {
-        return "";
-    }
-
-    // 检查是否包含十六进制转义序列
-    bool has_hex_escape = false;
-    for (size_t i = 0; i < str.size() - 1; ++i) {
-        if (str[i] == '\\' && i + 1 < str.size() && str[i + 1] == 'x') {
-            has_hex_escape = true;
-            break;
-        }
-    }
-    
-    if (!has_hex_escape) {
-        // 如果没有十六进制转义序列，使用简单解转义
-        return UnescapeSimple(str);
-    } else {
-        // 如果有十六进制转义序列，只处理十六进制转义
-        std::string result;
-        result.reserve(str.size());
-        
-        for (size_t i = 0; i < str.size(); ++i) {
-            if (str[i] == '\\' && i + 3 < str.size() && str[i + 1] == 'x') {
-                // 处理十六进制转义序列 \xHH
-                if (i + 3 >= str.size()) {
-                    // 安全检查：如果不足以形成一个完整的十六进制转义序列，直接添加当前字符
-                    result += str[i];
-                    continue;
-                }
-                std::string hex = str.substr(i + 2, 2);
-                // 直接解析十六进制值，不需要检查错误
-                unsigned char c = static_cast<unsigned char>(strtol(hex.c_str(), nullptr, 16));
-                result += c;
-                i += 3; // 跳过 \x 和两个十六进制字符
-            } else {
-                result += str[i];
-            }
-        }
-        return result;
-    }
 }
 
 
@@ -268,10 +228,14 @@ public:
     void SetCut(int cut) { cut_ = cut; }
     int GetCut() const { return cut_; }
 
+    void SetReconstruct(bool r) { reconstruct_ = r; }
+    bool GetReconstruct() const { return reconstruct_; }
+
     void Clear() {
         name_.clear();
         space_.clear();
         cut_ = 0;
+        reconstruct_ = false;
     }
 
     std::string AsStr() const {
@@ -279,6 +243,7 @@ public:
         oss << "name=" << name_ << "\n";
         oss << "space=" << Escape(space_) << "\n";
         oss << "cut=" << cut_ << "\n";
+        oss << "reconstruct=" << (reconstruct_ ? 1 : 0) << "\n";
         return oss.str();
     }
 
@@ -302,6 +267,8 @@ public:
                 space_ = Unescape(value);
             } else if (key == "cut") {
                 cut_ = std::stoi(value);
+            } else if (key == "reconstruct") {
+                reconstruct_ = std::stoi(value) != 0;
             }
         }
 
@@ -311,7 +278,8 @@ public:
 private:
     std::string name_;
     std::string space_ = "\xe2\x96\x81";
-    int cut_ = 0;  // 0: default, 1: split spaces and punctuation independently
+    int cut_ = 0;           // 0: default, 1: split spaces and punctuation independently
+    bool reconstruct_ = false;  // true: preserve all spaces (no stripping/merging)
 };
 
 class Model {

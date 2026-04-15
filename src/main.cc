@@ -36,6 +36,7 @@ void PrintUsage(const char* prog) {
               << "  --max-sentences <int>  Max input lines to load (default: 0=unlimited)\n"
               << "  --min-count <int>      Discard tokens with freq < this (default: 32)\n"
               << "  --cut <0|1>            Pre-tokenize mode: 0=default, 1=split spaces/punct independently\n"
+              << "  --reconstruct          Preserve all spaces (no stripping/merging)\n"
               << "  --max-piece-size <int> Max bytes per learned piece (default: 18, ~6 CJK chars)\n"
               << "  --cn-dict <file>       Enable CN mode for `piece` method using\n"
               << "                         a TSV (word\\tfreq) Unigram dictionary\n"
@@ -60,7 +61,7 @@ void RunCount(const std::string& method,
               const std::string& model_prefix, int vocab_size,
               const std::string& normalizer_name, int cpu_count,
               int max_sentences, int min_count, int max_piece_size,
-              const std::string& cn_dict, int cut) {
+              const std::string& cn_dict, int cut, bool reconstruct) {
     CounterSpec counter_spec;
     for (const auto& f : inputs) counter_spec.add_input(f);
     counter_spec.set_model_prefix(model_prefix);
@@ -80,6 +81,7 @@ void RunCount(const std::string& method,
     NormalizerSpec normalizer_spec;
     normalizer_spec.SetName(normalizer_name);
     normalizer_spec.SetCut(cut);
+    normalizer_spec.SetReconstruct(reconstruct);
 
     // Adjust vocab_size for byte tokens and control tokens
     int size = vocab_size;
@@ -312,6 +314,7 @@ int main(int argc, char* argv[]) {
         int min_count = 32;
         int max_piece_size = 18;
         int cut = 0;
+        bool reconstruct = false;
         std::string cn_dict;
 
         for (int i = 2; i < argc; i++) {
@@ -337,6 +340,8 @@ int main(int argc, char* argv[]) {
                 cn_dict = argv[++i];
             } else if (std::strcmp(argv[i], "--cut") == 0 && i + 1 < argc) {
                 cut = std::atoi(argv[++i]);
+            } else if (std::strcmp(argv[i], "--reconstruct") == 0) {
+                reconstruct = true;
             } else {
                 std::cerr << "Unknown option: " << argv[i] << "\n";
                 piece::PrintUsage(argv[0]);
@@ -349,11 +354,12 @@ int main(int argc, char* argv[]) {
             return 1;
         }
 
-        piece::RunCount(method, inputs, model_prefix, vocab_size, normalizer, cpu_count, max_sentences, min_count, max_piece_size, cn_dict, cut);
+        piece::RunCount(method, inputs, model_prefix, vocab_size, normalizer, cpu_count, max_sentences, min_count, max_piece_size, cn_dict, cut, reconstruct);
 
     } else if (command == "pretokenize") {
         std::string normalizer = "no";
         int cut = 0;
+        bool reconstruct = false;
         std::string input_file;
 
         for (int i = 2; i < argc; i++) {
@@ -361,6 +367,8 @@ int main(int argc, char* argv[]) {
                 normalizer = argv[++i];
             } else if (std::strcmp(argv[i], "--cut") == 0 && i + 1 < argc) {
                 cut = std::atoi(argv[++i]);
+            } else if (std::strcmp(argv[i], "--reconstruct") == 0) {
+                reconstruct = true;
             } else if (std::strcmp(argv[i], "--input") == 0 && i + 1 < argc) {
                 input_file = argv[++i];
             } else {
@@ -383,6 +391,7 @@ int main(int argc, char* argv[]) {
         piece::NormalizerSpec spec;
         spec.SetName(normalizer);
         spec.SetCut(cut);
+        spec.SetReconstruct(reconstruct);
         piece::Tokenizer tokenizer(spec);
 
         std::string line;
@@ -398,6 +407,7 @@ int main(int argc, char* argv[]) {
     } else if (command == "raw-count") {
         std::string normalizer = "no";
         int cut = 0;
+        bool reconstruct = false;
         int max_piece_size = 0;
         std::vector<std::string> inputs;
         std::string output_file;
@@ -407,6 +417,8 @@ int main(int argc, char* argv[]) {
                 normalizer = argv[++i];
             } else if (std::strcmp(argv[i], "--cut") == 0 && i + 1 < argc) {
                 cut = std::atoi(argv[++i]);
+            } else if (std::strcmp(argv[i], "--reconstruct") == 0) {
+                reconstruct = true;
             } else if (std::strcmp(argv[i], "--input") == 0 && i + 1 < argc) {
                 inputs.push_back(argv[++i]);
             } else if (std::strcmp(argv[i], "--output") == 0 && i + 1 < argc) {
@@ -423,6 +435,7 @@ int main(int argc, char* argv[]) {
         piece::NormalizerSpec spec;
         spec.SetName(normalizer);
         spec.SetCut(cut);
+        spec.SetReconstruct(reconstruct);
         piece::Tokenizer tokenizer(spec);
 
         std::unordered_map<std::string, int64_t> counts;

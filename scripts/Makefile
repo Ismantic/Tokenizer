@@ -6,11 +6,12 @@ EN_INPUT := $(ROOT)/data/en_sentences.txt
 MODEL_DIR := $(CURDIR)/output
 
 NORMALIZE       := no
-VOCAB_SIZE      := 200000
+VOCAB_SIZE      := 16000
 CPU             := 8
 MAX_SENTENCES   := 0
 MIN_COUNT       := 0
 CUT             := 0
+RECONSTRUCT     := 0
 MAX_PIECE_SIZE  := 0
 #CN_DICT         := dict.txt
 CN_DICT         := no
@@ -19,6 +20,7 @@ CN_DICT         := no
 # the `piece` method enters cn mode and pre-cuts Han runs with a
 # Unigram segmenter built from the dictionary.
 CN_DICT_FLAG := $(if $(CN_DICT),--cn-dict $(CN_DICT))
+RECONSTRUCT_FLAG := $(if $(filter-out 0,$(RECONSTRUCT)),--reconstruct)
 CN_INPUT_FLAG := $(if $(CN_INPUT),--input $(CN_INPUT))
 EN_INPUT_FLAG := $(if $(EN_INPUT),--input $(EN_INPUT))
 
@@ -35,7 +37,7 @@ $(MODEL_DIR)/$(1).model: $(wildcard $(EN_INPUT)) $(wildcard $(CN_INPUT)) | $(MOD
 		--vocab-size $(VOCAB_SIZE) --model $(MODEL_DIR)/$(1) \
 		--normalize $(NORMALIZE) --cpu $(CPU) \
 		--max-sentences $(MAX_SENTENCES) --min-count $(MIN_COUNT) \
-		--cut $(CUT) \
+		--cut $(CUT) $(RECONSTRUCT_FLAG) \
 		$(CN_DICT_FLAG)
 endef
 
@@ -49,7 +51,7 @@ MAX_PIECE_SIZE_FLAG := $(if $(filter-out 0,$(MAX_PIECE_SIZE)),--max-piece-size $
 raw_count: $(MODEL_DIR)/raw_count.txt
 $(MODEL_DIR)/raw_count.txt: $(wildcard $(EN_INPUT)) $(wildcard $(CN_INPUT)) | $(MODEL_DIR)
 	$(BIN) raw-count $(CN_INPUT_FLAG) $(EN_INPUT_FLAG) \
-		--normalize $(NORMALIZE) --cut $(CUT) \
+		--normalize $(NORMALIZE) --cut $(CUT) $(RECONSTRUCT_FLAG) \
 		$(MAX_PIECE_SIZE_FLAG) \
 		--output $@
 
