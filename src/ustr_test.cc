@@ -64,7 +64,7 @@ TEST(UstrTest, SplitTextLeadingSpaceAttachesToWord) {
 }
 
 TEST(UstrTest, SplitTextConsecutiveSpacesStandaloneThenAttached) {
-    // "a▁▁b" -> ["a", "▁", "▁b"]
+    // "a▁▁b" -> ["a", "▁", "▁b"]  (1 extra space as standalone, last attaches)
     std::string input = std::string("a") + kSp + kSp + "b";
     auto r = SplitText(input, kSp);
     ASSERT_EQ(static_cast<size_t>(3), r.size());
@@ -74,7 +74,7 @@ TEST(UstrTest, SplitTextConsecutiveSpacesStandaloneThenAttached) {
 }
 
 TEST(UstrTest, SplitTextThreeSpaces) {
-    // "a▁▁▁b" -> ["a", "▁", "▁", "▁b"]
+    // "a▁▁▁b" -> ["a", "▁", "▁", "▁b"]  (each extra space standalone, last attaches)
     std::string input = std::string("a") + kSp + kSp + kSp + "b";
     auto r = SplitText(input, kSp);
     ASSERT_EQ(static_cast<size_t>(4), r.size());
@@ -235,8 +235,7 @@ TEST(UstrTest, SplitTextCnSpaceAttachesToNonHan) {
 }
 
 TEST(UstrTest, SplitTextCnStandaloneSpacePassthrough) {
-    // "a▁▁世界" — SplitText: ["a", "▁", "▁世界"]; second piece has
-    // space + Han so the space is peeled in cn mode.
+    // "a▁▁世界" — each extra space standalone, Han separate.
     std::string input = std::string("a") + kSp + kSp + "世界";
     auto r = SplitTextCn(input, kSp, CharCutter);
     ASSERT_EQ(static_cast<size_t>(5), r.size());

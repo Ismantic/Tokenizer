@@ -267,6 +267,25 @@ bool IsPunctuationToken(std::string_view text) {
 //      space attaches to the following run.
 // Assumes the normalizer has already stripped leading/trailing whitespace
 // and replaced ' ' with the `space` sentinel (which may be multi-byte).
+// Pre-tokenize text into runs.
+//
+// cut=0 (default): equivalent to the following regex with FindAll:
+//
+//   [^\r\n\p{A}\p{H}\p{N}]?\p{A}+   letters (optional space/punct prefix)
+//   |\p{H}+                          Han run (no prefix)
+//   |\p{N}+                          digit run (no prefix)
+//   | ?[^\s\p{A}\p{H}\p{N}]+[\r\n]* punct run (optional space prefix)
+//   |\s*[\r\n]                       newline
+//   |\s                              single whitespace
+//
+// where \p{A}=alpha (non-Han non-digit), \p{H}=Han, \p{N}=digit.
+// Differences from GPT-4 regex:
+//   - \p{N}+ instead of \p{N}{1,3} (no digit length limit)
+//   - \p{H}+ separate from \p{A}+ (Han never carries space prefix)
+//   - \s instead of \s+(?!\S)|\s+ (each extra space is standalone)
+//
+// cut=1: spaces and punctuation all become independent tokens.
+//
 std::vector<std::string_view> SplitText(std::string_view text,
                                         std::string_view space,
                                         int cut) {
