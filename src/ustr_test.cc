@@ -289,14 +289,12 @@ TEST(UstrTest, SplitTextCut1English) {
 }
 
 TEST(UstrTest, SplitTextCut1Contraction) {
-    // "▁don't" -> "don" "'" "t"
+    // "▁don't" -> "▁" "don't"  (apostrophe between letters stays)
     std::string input = std::string(kSp) + "don't";
     auto r = SplitText(input, kSp, 1);
-    ASSERT_EQ(static_cast<size_t>(4), r.size());
+    ASSERT_EQ(static_cast<size_t>(2), r.size());
     EXPECT_EQ(std::string(kSp), std::string(r[0]));
-    EXPECT_EQ(std::string("don"), std::string(r[1]));
-    EXPECT_EQ(std::string("'"), std::string(r[2]));
-    EXPECT_EQ(std::string("t"), std::string(r[3]));
+    EXPECT_EQ(std::string("don't"), std::string(r[1]));
 }
 
 TEST(UstrTest, SplitTextCut1Chinese) {

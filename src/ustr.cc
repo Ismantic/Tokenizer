@@ -286,7 +286,7 @@ bool IsPunctuationToken(std::string_view text) {
 //
 // cut=1: no prefix attachment, every space/punct is independent:
 //
-//   \p{A}+                            letters
+//   \p{A}('\p{A})*                    letters (apostrophe between letters kept)
 //   |\p{H}+                           Han run
 //   |\p{N}+                           digit run
 //   |[^\s\p{A}\p{H}\p{N}]            single punct/symbol
@@ -329,12 +329,23 @@ std::vector<std::string_view> SplitText(std::string_view text,
                 p += clen;
             } else {
                 // Letter/Digit/Han → consume same-kind run.
+                // For letter runs: apostrophe between letters is not a break
+                // (keeps contractions like don't, they'll intact).
                 const char* run_start = p;
                 p += clen;
                 while (p < end) {
                     const int wlen = char_len1(p);
-                    if (classify1(p, wlen) != kind) break;
-                    p += wlen;
+                    Kind1 wkind = classify1(p, wlen);
+                    if (wkind == kind) { p += wlen; continue; }
+                    // Apostrophe inside letter run: peek ahead.
+                    if (kind == kLetter1 && *p == '\'' && p + 1 < end) {
+                        const int nlen = char_len1(p + 1);
+                        if (classify1(p + 1, nlen) == kLetter1) {
+                            p += 1 + nlen;  // consume ' + next letter
+                            continue;
+                        }
+                    }
+                    break;
                 }
                 result.emplace_back(run_start, p - run_start);
             }
